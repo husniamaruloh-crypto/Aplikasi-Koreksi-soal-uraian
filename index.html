@@ -1,0 +1,3376 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#1A47E8" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <title>Koreksi PSAS MTK 9 - Aplikasi Koreksi Soal Uraian</title>
+
+  <!-- Font Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- SheetJS (Impor Excel Daftar Siswa & Template) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <!-- ExcelJS (Ekspor Excel Rapi dengan Judul, Warna & Border) -->
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: #F4F7FC;
+      color: #0F172A;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background-color: #CBD5E1;
+      border-radius: 9999px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background-color: transparent;
+    }
+    .pb-safe {
+      padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased overflow-x-hidden pb-24 sm:pb-8">
+
+  <!-- ==================== HEADER BIRU UTAMA ==================== -->
+  <header class="bg-[#1A47E8] text-white shadow-sm sticky top-0 z-30">
+    <div class="max-w-6xl mx-auto px-3.5 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2.5 sm:gap-3 min-w-0">
+        <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/15 border border-white/20 flex items-center justify-center shrink-0">
+          <i data-lucide="scan-line" class="w-5 h-5 text-white"></i>
+        </div>
+        <div class="min-w-0">
+          <h1 class="text-sm sm:text-lg font-extrabold tracking-tight leading-tight truncate">Koreksi PSAS MTK 9</h1>
+          <p class="text-[10px] sm:text-xs text-blue-100 font-medium truncate">SMP Kelas 9 · SPLDV, Bangun Ruang &amp; Lingkaran</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <button type="button" onclick="openCloudSettingsModal()" id="header-cloud-btn"
+          class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full bg-white/15 active:bg-white/30 hover:bg-white/25 border border-white/25 text-[11px] sm:text-xs font-semibold transition-colors">
+          <span id="header-cloud-dot" class="w-2 h-2 rounded-full bg-amber-300 shrink-0"></span>
+          <i data-lucide="cloud" class="w-3.5 h-3.5 shrink-0"></i>
+          <span class="hidden xs:inline sm:inline">Sheets</span>
+        </button>
+        <div class="inline-flex items-center gap-1 px-2.5 sm:px-3.5 py-1.5 rounded-full bg-white/15 border border-white/20 text-[11px] sm:text-xs font-bold">
+          <i data-lucide="layers" class="w-3.5 h-3.5 shrink-0"></i>
+          <span id="header-active-count">1 Soal Aktif</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== KONTEN UTAMA ==================== -->
+  <main class="flex-1 w-full max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-5">
+
+    <!-- Navigasi 3 Tab (Desktop & Tablet) -->
+    <nav class="hidden sm:grid bg-[#EDF1F8] p-1.5 rounded-2xl border border-slate-200/80 grid-cols-3 gap-1.5" aria-label="Navigasi Utama">
+      <button type="button" id="tab-btn-scan" onclick="switchTab('scan')"
+        class="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all bg-white text-[#1A47E8] shadow-sm">
+        <i data-lucide="camera" class="w-4 h-4 shrink-0"></i>
+        <span class="truncate">1. Scan &amp; Periksa</span>
+      </button>
+      <button type="button" id="tab-btn-soal" onclick="switchTab('soal')"
+        class="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all text-slate-600 hover:text-slate-900">
+        <i data-lucide="file-text" class="w-4 h-4 shrink-0"></i>
+        <span class="truncate">2. Soal &amp; Rubrik</span>
+      </button>
+      <button type="button" id="tab-btn-rekap" onclick="switchTab('rekap')"
+        class="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all text-slate-600 hover:text-slate-900">
+        <i data-lucide="send" class="w-4 h-4 shrink-0"></i>
+        <span class="truncate">3. Rekap &amp; Kirim (<span id="tab-rekap-count">0</span>)</span>
+      </button>
+    </nav>
+
+    <!-- ================================================================== -->
+    <!-- PANEL 1: SCAN & PERIKSA                                            -->
+    <!-- ================================================================== -->
+    <section id="panel-scan" class="space-y-4 sm:space-y-5">
+
+      <!-- Kartu 1: Identitas Siswa -->
+      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 sm:p-6 space-y-4">
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex items-center gap-2.5 sm:gap-3">
+            <span class="w-7 h-7 rounded-full bg-[#1A47E8] text-white text-xs font-extrabold flex items-center justify-center shrink-0">1</span>
+            <h2 class="text-base sm:text-lg font-bold text-slate-900">Identitas Siswa</h2>
+          </div>
+          <button type="button" onclick="resetCurrentStudentSession()"
+            class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-50 active:bg-rose-100 hover:bg-rose-100 text-rose-600 text-xs font-bold transition-colors">
+            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+            <span>Reset Foto</span>
+          </button>
+        </div>
+
+        <!-- Bar Impor & Sinkronisasi Daftar Siswa -->
+        <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 sm:px-3.5 sm:py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-1.5 sm:gap-2.5 text-xs sm:text-sm">
+            <i data-lucide="file-spreadsheet" class="w-4 h-4 text-emerald-600 shrink-0"></i>
+            <span class="font-bold text-slate-800">Daftar Siswa &amp; Kelas</span>
+            <span class="text-slate-300">·</span>
+            <span id="student-import-status" class="font-semibold text-slate-500">Belum ada siswa dimuat</span>
+          </div>
+          <div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
+            <button type="button" onclick="pullDataFromCloud()"
+              class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-2 rounded-xl bg-blue-50 active:bg-blue-100 hover:bg-blue-100 border border-blue-200 text-[#1A47E8] text-xs font-bold transition-colors"
+              title="Tarik daftar siswa terbaru dari tab Daftar Siswa di Google Spreadsheet">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+              <span>Sinkron Sheets</span>
+            </button>
+            <button type="button" onclick="downloadStudentExcelTemplate()"
+              class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-2 rounded-xl bg-white active:bg-slate-100 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold transition-colors">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              <span>Format Excel</span>
+            </button>
+            <label for="input-import-students"
+              class="col-span-2 sm:col-span-1 cursor-pointer inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 sm:py-2 rounded-xl bg-[#059669] active:bg-[#047857] hover:bg-[#047857] text-white text-xs font-bold shadow-sm transition-colors">
+              <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+              <span>Impor Excel Siswa</span>
+            </label>
+            <input type="file" id="input-import-students" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleImportStudentsExcel(event)" />
+          </div>
+        </div>
+
+        <!-- Input Nama (Dropdown Pencarian) & Kelas -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3.5 sm:gap-4">
+          <div class="md:col-span-2 relative" id="student-dropdown-wrapper">
+            <label for="input-student-name" class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+              NAMA / KODE ANONIM SISWA <span class="text-rose-500">*</span>
+            </label>
+            <div class="relative">
+              <input type="text" id="input-student-name" autocomplete="off"
+                placeholder="Pilih siswa atau ketik nama untuk mencari..."
+                onfocus="openStudentDropdown()"
+                oninput="handleStudentNameInput(this.value)"
+                class="w-full pl-4 pr-16 py-3 rounded-xl border border-slate-200 bg-white text-base sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-[#1A47E8]" />
+              <div class="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+                <button type="button" id="btn-clear-student-name" onclick="clearStudentNameSelection()" aria-label="Hapus pilihan siswa"
+                  class="hidden p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors">
+                  <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+                <button type="button" onclick="toggleStudentDropdown()" aria-label="Buka daftar siswa"
+                  class="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors">
+                  <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                </button>
+              </div>
+            </div>
+            <!-- Panel Dropdown Daftar Siswa -->
+            <div id="student-dropdown-menu"
+              class="hidden absolute left-0 right-0 mt-1.5 bg-white rounded-xl border border-slate-200 shadow-xl z-20 overflow-hidden">
+              <div class="px-3.5 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between gap-2 text-[11px]">
+                <span id="student-dropdown-info" class="font-semibold text-slate-500">Daftar Siswa</span>
+                <button type="button" id="btn-toggle-all-students" onclick="toggleShowAllStudents()"
+                  class="font-bold text-[#1A47E8] hover:underline hidden shrink-0">Tampilkan Semua</button>
+              </div>
+              <div id="student-dropdown-list" class="max-h-64 overflow-y-auto custom-scroll divide-y divide-slate-100"></div>
+            </div>
+          </div>
+
+          <div>
+            <label for="select-student-class" class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+              KELAS <span class="text-rose-500">*</span>
+            </label>
+            <select id="select-student-class" onchange="handleClassSelectChange(this.value)"
+              class="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-base sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-[#1A47E8]">
+              <option value="">— Belum ada kelas —</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bar Upload & Periksa Sekaligus -->
+      <div class="bg-blue-50/80 border border-blue-200/80 rounded-2xl p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div class="space-y-0.5">
+          <div class="flex items-center gap-2">
+            <i data-lucide="images" class="w-4 h-4 text-[#1A47E8] shrink-0"></i>
+            <h3 class="text-sm font-bold text-blue-950">Upload Semua Jawaban, Lalu Periksa Sekaligus</h3>
+          </div>
+          <p id="batch-upload-status" class="text-xs text-blue-800/80 leading-relaxed">
+            Unggah foto tiap soal atau pilih banyak gambar sekaligus, kemudian klik Periksa Semua.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
+          <label for="input-batch-multi"
+            class="cursor-pointer inline-flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-2 rounded-xl bg-white active:bg-blue-50 hover:bg-blue-50 border border-blue-200 text-blue-900 text-xs font-bold transition-colors">
+            <i data-lucide="folder-up" class="w-3.5 h-3.5 text-[#1A47E8]"></i>
+            <span>Banyak Foto</span>
+          </label>
+          <input type="file" id="input-batch-multi" accept="image/*" multiple class="hidden" onchange="handleBatchMultiUpload(event)" />
+
+          <label for="input-batch-single"
+            class="cursor-pointer inline-flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-2 rounded-xl bg-white active:bg-blue-50 hover:bg-blue-50 border border-blue-200 text-blue-900 text-xs font-bold transition-colors">
+            <i data-lucide="file-image" class="w-3.5 h-3.5 text-[#1A47E8]"></i>
+            <span>1 Foto Semua</span>
+          </label>
+          <input type="file" id="input-batch-single" accept="image/*" class="hidden" onchange="handleBatchSingleSheetUpload(event)" />
+
+          <button type="button" id="btn-grade-all-top" onclick="gradeAllUploadedAnswers()"
+            class="col-span-2 sm:col-span-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 sm:py-2 rounded-xl bg-[#1A47E8] active:bg-[#153AC4] hover:bg-[#153AC4] text-white text-xs font-bold shadow-sm transition-colors disabled:opacity-50">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+            <span>Periksa Semua</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Daftar Kartu Soal Aktif untuk Scan & Periksa -->
+      <div id="scan-questions-container" class="space-y-4 sm:space-y-5"></div>
+
+      <!-- Bar Ringkasan Paket Nilai -->
+      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <p id="summary-checked-count" class="text-xs font-medium text-slate-500">Ringkasan Paket Nilai (0 dari 0 soal diperiksa)</p>
+          <div class="flex items-baseline gap-2 mt-0.5">
+            <span class="text-base sm:text-lg font-extrabold text-slate-900">Total Skor Uraian:</span>
+            <span id="summary-total-score" class="text-xl sm:text-2xl font-extrabold text-[#1A47E8]">0</span>
+            <span id="summary-max-score" class="text-xs sm:text-sm font-bold text-slate-400">/ 30</span>
+          </div>
+        </div>
+
+        <div class="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2.5">
+          <button type="button" id="btn-grade-all-bottom" onclick="gradeAllUploadedAnswers()"
+            class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-blue-50 active:bg-blue-100 hover:bg-blue-100 border border-blue-200 text-[#1A47E8] text-xs sm:text-sm font-bold transition-colors disabled:opacity-50">
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+            <span>Periksa Semua</span>
+          </button>
+          <button type="button" id="btn-save-recap" onclick="savePackageToRecap()"
+            class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#1A47E8] active:bg-[#153AC4] hover:bg-[#153AC4] text-white text-xs sm:text-sm font-bold shadow-sm transition-colors disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none">
+            <i data-lucide="bookmark-check" class="w-4 h-4"></i>
+            <span>Simpan Paket Nilai ke Rekap &amp; Kirim</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- PANEL 2: SOAL & RUBRIK                                             -->
+    <!-- ================================================================== -->
+    <section id="panel-soal" class="hidden space-y-5">
+
+      <!-- Pengaturan Bobot Nilai Uraian (PG 70% · Uraian 30%) -->
+      <div class="bg-white rounded-2xl border border-blue-200/80 shadow-sm p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div class="space-y-1">
+          <div class="flex items-center gap-2">
+            <span class="px-2.5 py-0.5 rounded-full bg-blue-100 text-[#1A47E8] text-[11px] font-extrabold">PG 70% · Uraian 30%</span>
+            <h3 class="text-sm font-bold text-slate-900">Pengaturan Bobot Total Uraian</h3>
+          </div>
+          <p class="text-xs text-slate-500">
+            Nilai akhir uraian dijumlahkan langsung dari tiap nomor soal (tanpa rata-rata). Default 5 soal × 6 poin = maksimal 30 poin.
+          </p>
+        </div>
+
+        <div class="flex flex-wrap items-end gap-3">
+          <div>
+            <label for="input-bobot-maks" class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Bobot Maks</label>
+            <input type="number" id="input-bobot-maks" min="1" max="100" step="1" value="30"
+              onchange="updateWeightSettings()"
+              class="w-20 px-3 py-2 rounded-xl border border-slate-200 text-sm font-bold text-slate-800 text-center focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+          </div>
+          <div>
+            <label for="input-target-jml-soal" class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Jml Soal</label>
+            <input type="number" id="input-target-jml-soal" min="1" max="20" step="1" value="5"
+              onchange="updateWeightSettings()"
+              class="w-20 px-3 py-2 rounded-xl border border-slate-200 text-sm font-bold text-slate-800 text-center focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+          </div>
+          <div class="px-3 py-2 rounded-xl bg-slate-100 text-xs font-bold text-slate-700">
+            Maks/Soal: <span id="weight-per-question-label" class="text-[#1A47E8]">6</span> poin
+          </div>
+          <button type="button" onclick="autoDistributeWeightsToActiveQuestions()"
+            class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#1A47E8] hover:bg-[#153AC4] text-white text-xs font-bold shadow-sm transition-colors">
+            <i data-lucide="scale" class="w-3.5 h-3.5"></i>
+            <span>Bagi Otomatis ke Soal Aktif</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Kartu Input Soal Baru, Kunci Jawaban & Rubrik -->
+      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 sm:p-6 space-y-5">
+        <div class="flex items-center justify-between gap-3">
+          <h2 id="form-soal-title" class="text-base sm:text-lg font-bold text-slate-900">Input Soal Baru, Kunci Jawaban &amp; Rubrik</h2>
+          <button type="button" onclick="resetQuestionForm()"
+            class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold transition-colors">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            <span>Baru</span>
+          </button>
+        </div>
+
+        <!-- Baris No Soal, Topik & Bobot Soal -->
+        <div class="grid grid-cols-1 sm:grid-cols-12 gap-4">
+          <div class="sm:col-span-3">
+            <label for="input-no-soal" class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+              NO. SOAL <span class="text-rose-500">*</span>
+            </label>
+            <input type="text" id="input-no-soal" placeholder="Misal: 41"
+              class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+          </div>
+          <div class="sm:col-span-6">
+            <label for="input-topik-soal" class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+              TOPIK / JUDUL SINGKAT <span class="text-rose-500">*</span>
+            </label>
+            <input type="text" id="input-topik-soal" placeholder="Misal: Kerucut (Volume &amp; Luas Selimut)"
+              class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+          </div>
+          <div class="sm:col-span-3">
+            <label for="input-soal-max-poin" class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+              MAKS SKOR SOAL <span class="text-rose-500">*</span>
+            </label>
+            <input type="number" id="input-soal-max-poin" min="0.5" max="100" step="0.5" value="6"
+              oninput="updateRubricTotalBadge()"
+              class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-[#1A47E8] focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+          </div>
+        </div>
+
+        <!-- Teks Butir Soal Uraian + Foto/Upload Soal -->
+        <div class="space-y-2">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <label for="input-teks-soal" class="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              TEKS BUTIR SOAL URAIAN <span class="text-rose-500">*</span>
+            </label>
+            <div class="flex items-center gap-2">
+              <label for="input-foto-soal-camera"
+                class="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[#1A47E8] text-xs font-bold transition-colors">
+                <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+                <span>Foto Soal</span>
+              </label>
+              <input type="file" id="input-foto-soal-camera" accept="image/*" capture="environment" class="hidden" onchange="handleQuestionImageUpload(event)" />
+
+              <label for="input-foto-soal-file"
+                class="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold transition-colors">
+                <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+                <span>Upload Gambar Soal</span>
+              </label>
+              <input type="file" id="input-foto-soal-file" accept="image/*" class="hidden" onchange="handleQuestionImageUpload(event)" />
+            </div>
+          </div>
+
+          <textarea id="input-teks-soal" rows="4" oninput="updateAiGeneratorButtonState()"
+            placeholder="Ketik, tempelkan soal uraian, atau upload gambar soal di atas agar terbaca otomatis..."
+            class="w-full p-3.5 rounded-xl border border-slate-200 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30"></textarea>
+        </div>
+
+        <!-- Kotak Bantuan AI Penyusun Kunci & Rubrik -->
+        <div class="rounded-2xl bg-blue-50/70 border border-blue-200/80 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="space-y-1.5">
+            <h3 class="text-xs sm:text-sm font-bold text-blue-950">Bantuan AI Penyusun Kunci &amp; Rubrik</h3>
+            <p class="text-xs text-blue-800/80">Isi atau upload soal di atas terlebih dahulu, lalu buat kunci jawaban dan rubrik otomatis sesuai bobot soal.</p>
+            <label class="inline-flex items-center gap-2 text-xs font-medium text-blue-950 cursor-pointer pt-0.5">
+              <input type="checkbox" id="chk-auto-generate-after-ocr" checked
+                class="w-4 h-4 rounded border-blue-300 text-[#1A47E8] focus:ring-blue-500" />
+              <span>Langsung buat jawaban &amp; rubrik otomatis setelah membaca gambar soal</span>
+            </label>
+          </div>
+          <button type="button" id="btn-ai-generate-rubric" onclick="generateKeyAndRubricWithAI()" disabled
+            class="shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#1A47E8] hover:bg-[#153AC4] text-white text-xs font-bold shadow-sm transition-colors disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none">
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+            <span id="btn-ai-generate-label">Buat Jawaban &amp; Rubrik Otomatis</span>
+          </button>
+        </div>
+
+        <!-- Kunci Jawaban Acuan -->
+        <div class="space-y-2">
+          <label for="input-kunci-jawaban" class="block text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            KUNCI JAWABAN ACUAN (DAPAT DIEDIT) <span class="text-rose-500">*</span>
+          </label>
+          <textarea id="input-kunci-jawaban" rows="4"
+            placeholder="Kosong sebelum ada soal. Isi manual atau klik 'Buat Jawaban & Rubrik Otomatis'..."
+            class="w-full p-3.5 rounded-xl border border-slate-200 font-mono text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30"></textarea>
+        </div>
+
+        <!-- Verifikasi Kunci Jawaban -->
+        <label class="flex items-center gap-2.5 p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 cursor-pointer">
+          <input type="checkbox" id="chk-verify-key"
+            class="w-4 h-4 rounded border-slate-300 text-[#1A47E8] focus:ring-blue-500" />
+          <span class="text-xs sm:text-sm font-medium text-slate-700">Saya sudah memeriksa dan memverifikasi kebenaran Kunci Jawaban Acuan di atas.</span>
+        </label>
+
+        <!-- Rubrik Penilaian -->
+        <div class="space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <span id="rubric-header-label" class="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              RUBRIK PENILAIAN (TOTAL SKOR HARUS 6)
+            </span>
+            <span id="rubric-total-badge" class="px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold font-mono">
+              Total Skor: 0 / 6
+            </span>
+          </div>
+
+          <div id="rubric-editor-container" class="space-y-2.5"></div>
+
+          <div class="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+            <button type="button" onclick="addManualCriterion()"
+              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[#1A47E8] text-xs font-bold transition-colors">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span>Tambah Kriteria Manual</span>
+            </button>
+            <button type="button" onclick="applyTemplate404020()"
+              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold transition-colors">
+              <span>Pakai Template 40 / 40 / 20</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Tombol Simpan Soal -->
+        <button type="button" onclick="saveQuestionForm()"
+          class="w-full py-3.5 px-5 rounded-xl bg-[#059669] hover:bg-[#047857] text-white text-sm font-bold shadow-sm inline-flex items-center justify-center gap-2 transition-colors">
+          <i data-lucide="save" class="w-4 h-4"></i>
+          <span id="btn-save-soal-label">Simpan Soal, Kunci &amp; Rubrik</span>
+        </button>
+      </div>
+
+      <!-- Daftar Soal & Rubrik Aktif -->
+      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 sm:p-6 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="text-base sm:text-lg font-bold text-slate-900">Daftar Soal &amp; Rubrik Aktif</h2>
+            <p class="text-xs text-slate-500">Soal yang aktif akan muncul pada urutan scan jawaban siswa.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <span id="active-weight-summary-badge" class="px-3 py-1 rounded-full bg-blue-50 text-[#1A47E8] text-xs font-bold">
+              Total Bobot Aktif: 0 / 30 Poin
+            </span>
+            <button type="button" onclick="syncAppConfigToCloud()"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 text-xs font-bold transition-colors"
+              title="Simpan Daftar Siswa, Soal, Kunci & Rubrik ke Google Sheets">
+              <i data-lucide="cloud-upload" class="w-3.5 h-3.5"></i>
+              <span>Simpan ke Sheets</span>
+            </button>
+          </div>
+        </div>
+
+        <div id="saved-questions-list" class="space-y-3"></div>
+      </div>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- PANEL 3: REKAP & KIRIM                                             -->
+    <!-- ================================================================== -->
+    <section id="panel-rekap" class="hidden">
+      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 sm:p-6 space-y-5">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-base sm:text-lg font-bold text-slate-900">Rekap Nilai Siswa</h2>
+            <p class="text-xs sm:text-sm text-slate-500 mt-0.5">
+              Ketuk tombol <strong>Kirim</strong> pada kartu siswa untuk membagikan hasil ke WhatsApp/Email.
+            </p>
+          </div>
+
+          <div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 shrink-0">
+            <button type="button" onclick="openCloudSettingsModal()"
+              class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-blue-50 active:bg-blue-100 hover:bg-blue-100 border border-blue-200 text-[#1A47E8] text-xs font-bold transition-colors">
+              <i data-lucide="cloud" class="w-4 h-4"></i>
+              <span>Atur Cloud</span>
+            </button>
+
+            <button type="button" id="btn-pull-cloud" onclick="pullDataFromCloud()"
+              class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-white active:bg-slate-50 hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold transition-colors"
+              title="Tarik data terbaru dari Google Spreadsheet ke aplikasi ini">
+              <i data-lucide="cloud-download" class="w-4 h-4 text-[#1A47E8]"></i>
+              <span>Tarik Sheets</span>
+            </button>
+
+            <button type="button" id="btn-sync-all-cloud" onclick="syncAllRecapsToCloud()"
+              class="col-span-2 sm:col-span-1 inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#1A47E8] active:bg-[#153AC4] hover:bg-[#153AC4] text-white text-xs font-bold shadow-sm transition-colors">
+              <i data-lucide="cloud-upload" class="w-4 h-4"></i>
+              <span>Simpan ke Sheets &amp; Drive</span>
+            </button>
+
+            <button type="button" onclick="exportRecapToExcel()"
+              class="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#10B981] active:bg-[#059669] hover:bg-[#059669] text-white text-xs font-bold shadow-sm transition-colors">
+              <i data-lucide="download" class="w-4 h-4"></i>
+              <span>Unduh Excel</span>
+            </button>
+
+            <button type="button" onclick="confirmDeleteAllRecap()"
+              class="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-rose-50 active:bg-rose-100 hover:bg-rose-100 text-rose-600 text-xs font-bold transition-colors">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+              <span>Hapus Semua</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Tampilan Kartu Rekap Khusus Android / Mobile -->
+        <div id="rekap-mobile-cards" class="md:hidden space-y-3"></div>
+
+        <!-- Tabel Rekap Nilai (Tablet & Desktop) -->
+        <div class="hidden md:block overflow-x-auto custom-scroll border border-slate-200 rounded-2xl">
+          <table class="w-full text-left border-collapse min-w-[680px]">
+            <thead id="rekap-table-head" class="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-600"></thead>
+            <tbody id="rekap-table-body" class="divide-y divide-slate-100 text-sm"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==================== BOTTOM NAVIGATION KHUSUS ANDROID / MOBILE ==================== -->
+  <nav class="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-[0_-4px_16px_rgba(15,23,42,0.06)] pb-safe" aria-label="Navigasi Mobile">
+    <div class="grid grid-cols-3 gap-1 px-2 pt-1.5">
+      <button type="button" id="mob-tab-btn-scan" onclick="switchTab('scan')"
+        class="flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 rounded-xl text-[11px] font-bold text-[#1A47E8] bg-blue-50/80 transition-colors">
+        <i data-lucide="camera" class="w-5 h-5"></i>
+        <span>Scan</span>
+      </button>
+      <button type="button" id="mob-tab-btn-soal" onclick="switchTab('soal')"
+        class="flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 rounded-xl text-[11px] font-semibold text-slate-500 transition-colors">
+        <i data-lucide="file-text" class="w-5 h-5"></i>
+        <span>Soal &amp; Rubrik</span>
+      </button>
+      <button type="button" id="mob-tab-btn-rekap" onclick="switchTab('rekap')"
+        class="relative flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 rounded-xl text-[11px] font-semibold text-slate-500 transition-colors">
+        <div class="relative">
+          <i data-lucide="send" class="w-5 h-5"></i>
+          <span id="mobile-rekap-count" class="hidden absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full bg-[#1A47E8] text-white text-[10px] font-extrabold flex items-center justify-center">0</span>
+        </div>
+        <span>Rekap</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ==================== MODAL & TOAST ==================== -->
+  <div id="app-modal-backdrop" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div id="app-modal-content" class="bg-white rounded-t-3xl sm:rounded-2xl shadow-xl border border-slate-200 w-full max-w-2xl max-h-[90vh] overflow-y-auto custom-scroll"></div>
+  </div>
+
+  <div id="toast-container" class="fixed bottom-20 sm:bottom-5 right-0 sm:right-5 left-0 sm:left-auto z-50 flex flex-col gap-2 max-w-sm mx-auto sm:mx-0 w-full pointer-events-none px-4 sm:px-0"></div>
+
+  <!-- ==================== JAVASCRIPT APLIKASI ==================== -->
+  <script>
+    // =========================================================================
+    // 1. KONFIGURASI & STATE APLIKASI
+    // =========================================================================
+    const STORAGE_KEY = "koreksi_psas_mtk9_state_v5";
+    const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025";
+    const apiKey = ""; // Diisi otomatis oleh environment atau lewat pengaturan kustom
+
+    const DEFAULT_QUESTION = {
+      id: "q-default-41",
+      noSoal: "41",
+      topik: "SPLDV",
+      teksSoal: "41. Dalam rangka memperingati hari ulang tahun sekolah, SMP Negeri 2 Serang Baru mengadakan bazar kewirausahaan. Salah satu stan menjual roti dan susu kotak. Catatan penjualan menunjukkan bahwa pembelian 2 roti dan 3 susu kotak seharga Rp31.000,00, sedangkan pembelian 3 roti dan 2 susu kotak seharga Rp29.000,00. Tentukan harga masing-masing 1 roti dan 1 susu kotak!",
+      kunciJawaban: "Misal harga 1 roti = x dan harga 1 susu kotak = y.\nModel Matematika:\n2x + 3y = 31.000  ...(1)\n3x + 2y = 29.000  ...(2)\n\nEliminasi x:\n(1) x 3 => 6x + 9y = 93.000\n(2) x 2 => 6x + 4y = 58.000\n--------------------------- (-)\n5y = 35.000 => y = 7.000\n\nSubstitusi y = 7.000 ke (2):\n3x + 2(7.000) = 29.000\n3x + 14.000 = 29.000\n3x = 15.000 => x = 5.000\n\nJadi, harga 1 roti adalah Rp5.000,00 dan harga 1 susu kotak adalah Rp7.000,00.",
+      aktif: true,
+      terverifikasi: true,
+      rubrik: [
+        { nama: "Pemahaman Masalah dan Pemodelan Matematika", deskripsi: "Menuliskan diketahui, permisalan variabel x dan y, serta menyusun 2 persamaan linear (2x + 3y = 31.000 dan 3x + 2y = 29.000).", skorMaks: 1.5 },
+        { nama: "Langkah Eliminasi (Tahap 1)", deskripsi: "Menyamakan koefisien salah satu variabel dan melakukan operasi pengurangan aljabar hingga menemukan nilai variabel pertama (y = 7.000 atau x = 5.000).", skorMaks: 2 },
+        { nama: "Langkah Substitusi (Tahap 2)", deskripsi: "Mensubstitusikan nilai variabel pertama ke persamaan awal dan menghitung nilai variabel kedua dengan tepat.", skorMaks: 1.5 },
+        { nama: "Kesimpulan dan Ketepatan Satuan", deskripsi: "Menuliskan kesimpulan lengkap dengan satuan Rupiah (roti Rp5.000,00 dan susu kotak Rp7.000,00).", skorMaks: 1 }
+      ]
+    };
+
+    let state = {
+      activeTab: "scan",
+      bobotUraianMaks: 30,
+      targetJumlahSoal: 5,
+      students: [],
+      studentsImported: false,
+      currentStudentName: "",
+      currentStudentClass: "",
+      showAllStudentsInDropdown: false,
+      questions: [JSON.parse(JSON.stringify(DEFAULT_QUESTION))],
+      editingQuestionId: null,
+      draftRubrik: [],
+      scanData: {}, // { [questionId]: { mode: 'foto'|'teks', imageDataUrl, imageBase64, imageMime, textAnswer, grading, error, isGrading } }
+      recaps: [],
+      cloudConfig: {
+        gasUrl: "",
+        autoSync: true,
+        customGeminiKey: ""
+      }
+    };
+
+    let isBatchGrading = false;
+
+    // =========================================================================
+    // 2. UTILITAS UMUM, TOAST, MODAL & PERSISTENSI
+    // =========================================================================
+    function escapeHtml(str) {
+      return String(str ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function roundScore(val) {
+      const n = Number(val);
+      if (!Number.isFinite(n)) return 0;
+      return Math.round(n * 10) / 10;
+    }
+
+    function formatScore(val) {
+      const n = roundScore(val);
+      return Number.isInteger(n) ? String(n) : n.toFixed(1).replace(/\.0$/, "");
+    }
+
+    function getQuestionMaxScore(q) {
+      if (!q || !Array.isArray(q.rubrik)) return 0;
+      return roundScore(q.rubrik.reduce((sum, r) => sum + (Number(r.skorMaks) || 0), 0));
+    }
+
+    function getDefaultPerQuestionWeight() {
+      const bobot = Number(state.bobotUraianMaks) || 30;
+      const count = Math.max(1, Number(state.targetJumlahSoal) || 5);
+      return roundScore(bobot / count);
+    }
+
+    function normalizeNoSoal(val) {
+      return String(val || "").replace(/^No\.?\s*/i, "").trim();
+    }
+
+    function showToast(message, type = "info") {
+      const container = document.getElementById("toast-container");
+      if (!container) return;
+      const colors = {
+        success: "bg-emerald-600 text-white",
+        error: "bg-rose-600 text-white",
+        warning: "bg-amber-500 text-white",
+        info: "bg-slate-800 text-white"
+      };
+      const el = document.createElement("div");
+      el.className = `pointer-events-auto px-4 py-3 rounded-xl shadow-lg text-xs sm:text-sm font-semibold flex items-center justify-between gap-3 transition-all duration-300 ${colors[type] || colors.info}`;
+      el.innerHTML = `<span>${escapeHtml(message)}</span>`;
+      container.appendChild(el);
+      setTimeout(() => {
+        el.style.opacity = "0";
+        el.style.transform = "translateY(8px)";
+        setTimeout(() => el.remove(), 300);
+      }, 3600);
+    }
+
+    function openModal(htmlContent) {
+      const backdrop = document.getElementById("app-modal-backdrop");
+      const content = document.getElementById("app-modal-content");
+      content.innerHTML = htmlContent;
+      backdrop.classList.remove("hidden");
+      lucide.createIcons();
+    }
+
+    function closeModal() {
+      const backdrop = document.getElementById("app-modal-backdrop");
+      backdrop.classList.add("hidden");
+      document.getElementById("app-modal-content").innerHTML = "";
+    }
+
+    document.getElementById("app-modal-backdrop").addEventListener("click", (e) => {
+      if (e.target.id === "app-modal-backdrop") closeModal();
+    });
+
+    function copyTextToClipboard(text, successMsg = "Berhasil disalin ke clipboard!") {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try {
+        document.execCommand("copy");
+        showToast(successMsg, "success");
+      } catch (err) {
+        showToast("Gagal menyalin teks.", "error");
+      } finally {
+        ta.remove();
+      }
+    }
+
+    function persistState() {
+      try {
+        const toSave = {
+          bobotUraianMaks: state.bobotUraianMaks,
+          targetJumlahSoal: state.targetJumlahSoal,
+          students: state.students,
+          studentsImported: state.studentsImported,
+          currentStudentName: state.currentStudentName,
+          currentStudentClass: state.currentStudentClass,
+          questions: state.questions,
+          recaps: state.recaps,
+          cloudConfig: state.cloudConfig
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+      } catch (err) {
+        console.warn("Gagal menyimpan state ke localStorage:", err);
+      }
+    }
+
+    function normalizeAndMergeRecaps(recapList) {
+      const map = new Map();
+      (recapList || []).forEach((item) => {
+        if (!item || !item.nama) return;
+        const namaClean = String(item.nama).trim();
+        const kelasClean = String(item.kelas || "").trim();
+        const key = `${namaClean.toLowerCase()}__${kelasClean.toLowerCase()}`;
+
+        if (!map.has(key)) {
+          map.set(key, {
+            id: item.id || `rec-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            timestamp: item.timestamp || new Date().toLocaleString("id-ID"),
+            nama: namaClean,
+            kelas: kelasClean,
+            cloudSynced: Boolean(item.cloudSynced),
+            driveLinks: { ...(item.driveLinks || {}) },
+            rincianMap: {}
+          });
+        }
+
+        const entry = map.get(key);
+        if (item.timestamp) entry.timestamp = item.timestamp;
+        if (item.cloudSynced) entry.cloudSynced = true;
+        if (item.driveLinks) {
+          Object.keys(item.driveLinks).forEach((k) => {
+            entry.driveLinks[normalizeNoSoal(k)] = item.driveLinks[k];
+          });
+        }
+
+        (item.rincian || []).forEach((r) => {
+          const cleanNo = normalizeNoSoal(r.noSoal);
+          if (!cleanNo) return;
+          entry.rincianMap[cleanNo] = {
+            noSoal: cleanNo,
+            topik: r.topik || "Uraian",
+            skor: roundScore(r.skor),
+            skorMaks: r.skorMaks ? roundScore(r.skorMaks) : undefined,
+            catatanUmum: r.catatanUmum || "",
+            transkripsi: r.transkripsi || ""
+          };
+        });
+      });
+
+      return Array.from(map.values()).map((entry) => {
+        const rincian = Object.values(entry.rincianMap).sort((a, b) =>
+          String(a.noSoal).localeCompare(String(b.noSoal), "id", { numeric: true })
+        );
+        const totalSkor = roundScore(rincian.reduce((s, r) => s + (Number(r.skor) || 0), 0));
+        return {
+          id: entry.id,
+          timestamp: entry.timestamp,
+          nama: entry.nama,
+          kelas: entry.kelas,
+          totalSkor,
+          cloudSynced: entry.cloudSynced,
+          driveLinks: entry.driveLinks,
+          rincian
+        };
+      });
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (typeof parsed.bobotUraianMaks === "number" && parsed.bobotUraianMaks > 0) {
+          state.bobotUraianMaks = parsed.bobotUraianMaks;
+        }
+        if (typeof parsed.targetJumlahSoal === "number" && parsed.targetJumlahSoal > 0) {
+          state.targetJumlahSoal = parsed.targetJumlahSoal;
+        }
+        if (Array.isArray(parsed.students)) {
+          state.students = parsed.students;
+          state.studentsImported = Boolean(parsed.studentsImported || parsed.students.length > 0);
+        }
+        state.currentStudentName = parsed.currentStudentName || "";
+        state.currentStudentClass = parsed.currentStudentClass || "";
+        if (Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+          state.questions = parsed.questions;
+        }
+        if (Array.isArray(parsed.recaps)) {
+          state.recaps = normalizeAndMergeRecaps(parsed.recaps);
+        }
+        if (parsed.cloudConfig) {
+          state.cloudConfig = {
+            gasUrl: parsed.cloudConfig.gasUrl || "",
+            autoSync: parsed.cloudConfig.autoSync !== false,
+            customGeminiKey: parsed.cloudConfig.customGeminiKey || ""
+          };
+        }
+      } catch (err) {
+        console.warn("Gagal memuat state:", err);
+      }
+    }
+
+    function updateGlobalCounters() {
+      const activeCount = state.questions.filter((q) => q.aktif).length;
+      const elActive = document.getElementById("header-active-count");
+      if (elActive) elActive.textContent = `${activeCount} Soal Aktif`;
+
+      const elRekap = document.getElementById("tab-rekap-count");
+      if (elRekap) elRekap.textContent = String(state.recaps.length);
+
+      const elMobRekap = document.getElementById("mobile-rekap-count");
+      if (elMobRekap) {
+        elMobRekap.textContent = String(state.recaps.length);
+        if (state.recaps.length > 0) elMobRekap.classList.remove("hidden");
+        else elMobRekap.classList.add("hidden");
+      }
+
+      const dot = document.getElementById("header-cloud-dot");
+      if (dot) {
+        dot.className = state.cloudConfig.gasUrl
+          ? "w-2 h-2 rounded-full bg-emerald-300 shrink-0"
+          : "w-2 h-2 rounded-full bg-amber-300 shrink-0";
+      }
+    }
+
+    function switchTab(tabName) {
+      state.activeTab = tabName;
+      ["scan", "soal", "rekap"].forEach((t) => {
+        const panel = document.getElementById(`panel-${t}`);
+        const btn = document.getElementById(`tab-btn-${t}`);
+        const mobBtn = document.getElementById(`mob-tab-btn-${t}`);
+        if (panel) {
+          if (t === tabName) panel.classList.remove("hidden");
+          else panel.classList.add("hidden");
+        }
+        if (btn) {
+          btn.className = t === tabName
+            ? "flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all bg-white text-[#1A47E8] shadow-sm"
+            : "flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all text-slate-600 hover:text-slate-900";
+        }
+        if (mobBtn) {
+          mobBtn.className = t === tabName
+            ? "relative flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 rounded-xl text-[11px] font-bold text-[#1A47E8] bg-blue-50/80 transition-colors"
+            : "relative flex flex-col items-center justify-center gap-0.5 py-1.5 px-2 rounded-xl text-[11px] font-semibold text-slate-500 transition-colors";
+        }
+      });
+
+      if (tabName === "scan") renderScanTab();
+      if (tabName === "soal") renderSoalTab();
+      if (tabName === "rekap") renderRekapTab();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      lucide.createIcons();
+    }
+
+    // =========================================================================
+    // 3. IDENTITAS SISWA & IMPOR EXCEL (TANPA DATA DEFAULT)
+    // =========================================================================
+    function downloadStudentExcelTemplate() {
+      const wsData = [
+        ["No", "Nama Siswa", "Kelas"],
+        [1, "CONTOH NAMA SISWA 1", "9-A"],
+        [2, "CONTOH NAMA SISWA 2", "9-B"]
+      ];
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      ws["!cols"] = [{ wch: 6 }, { wch: 30 }, { wch: 12 }];
+      XLSX.utils.book_append_sheet(wb, ws, "Daftar Siswa");
+      XLSX.writeFile(wb, "Format_Daftar_Siswa_PSAS.xlsx");
+      showToast("Template Excel daftar siswa berhasil diunduh.", "success");
+    }
+
+    function handleImportStudentsExcel(event) {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: "array" });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: "" });
+
+          let namaCol = -1;
+          let kelasCol = -1;
+          let headerRowIdx = -1;
+
+          for (let i = 0; i < Math.min(rows.length, 15); i++) {
+            const row = rows[i].map((c) => String(c || "").trim().toLowerCase());
+            const foundNama = row.findIndex((c) => c.includes("nama") || c.includes("siswa") || c.includes("peserta"));
+            const foundKelas = row.findIndex((c) => c.includes("kelas") || c.includes("rombel") || c.includes("class"));
+            if (foundNama !== -1) {
+              namaCol = foundNama;
+              kelasCol = foundKelas;
+              headerRowIdx = i;
+              break;
+            }
+          }
+
+          if (namaCol === -1) {
+            // Fallback jika tanpa header eksplisit
+            const sample = rows.find((r) => r.some((c) => String(c).trim() !== "")) || [];
+            if (sample.length >= 3 && /^\d+$/.test(String(sample[0]).trim())) {
+              namaCol = 1;
+              kelasCol = 2;
+            } else {
+              namaCol = 0;
+              kelasCol = sample.length > 1 ? 1 : -1;
+            }
+          }
+
+          const imported = [];
+          const seen = new Set();
+          for (let i = headerRowIdx + 1; i < rows.length; i++) {
+            const row = rows[i];
+            if (!row) continue;
+            const nama = String(row[namaCol] ?? "").trim();
+            const kelas = kelasCol !== -1 ? String(row[kelasCol] ?? "").trim() : "";
+            if (!nama || nama.toLowerCase() === "nama" || nama.toLowerCase() === "nama siswa") continue;
+            const key = `${nama.toLowerCase()}|${kelas.toLowerCase()}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              imported.push({ nama, kelas });
+            }
+          }
+
+          if (imported.length === 0) {
+            showToast("Tidak ditemukan data nama siswa yang valid di file Excel.", "warning");
+            return;
+          }
+
+          state.students = imported;
+          state.studentsImported = true;
+          state.currentStudentName = "";
+          const uniqueClasses = [...new Set(imported.map((s) => s.kelas).filter(Boolean))];
+          state.currentStudentClass = uniqueClasses[0] || "";
+          state.showAllStudentsInDropdown = false;
+          persistState();
+          renderStudentIdentityControls();
+
+          if (state.cloudConfig.gasUrl && state.cloudConfig.autoSync) {
+            syncAppConfigToCloud({ silent: true });
+          }
+          showToast(`${imported.length} siswa berhasil diimpor dari Excel!`, "success");
+        } catch (err) {
+          showToast("Gagal membaca file Excel: " + err.message, "error");
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function renderStudentIdentityControls() {
+      const statusEl = document.getElementById("student-import-status");
+      const nameInput = document.getElementById("input-student-name");
+      const clearBtn = document.getElementById("btn-clear-student-name");
+      const classSelect = document.getElementById("select-student-class");
+
+      if (statusEl) {
+        if (state.students.length > 0) {
+          statusEl.textContent = `${state.students.length} siswa dimuat`;
+          statusEl.className = "font-semibold text-emerald-600";
+        } else {
+          statusEl.textContent = "Belum ada siswa dimuat";
+          statusEl.className = "font-semibold text-slate-500";
+        }
+      }
+
+      if (nameInput && nameInput.value !== state.currentStudentName) {
+        nameInput.value = state.currentStudentName;
+      }
+      if (clearBtn) {
+        if ((state.currentStudentName || "").trim()) clearBtn.classList.remove("hidden");
+        else clearBtn.classList.add("hidden");
+      }
+
+      if (classSelect) {
+        const classes = [...new Set(state.students.map((s) => s.kelas).filter(Boolean))].sort((a, b) =>
+          a.localeCompare(b, "id", { numeric: true })
+        );
+        if (state.currentStudentClass && !classes.includes(state.currentStudentClass)) {
+          classes.unshift(state.currentStudentClass);
+        }
+
+        if (classes.length === 0) {
+          classSelect.innerHTML = `<option value="">— Belum ada kelas —</option>`;
+        } else {
+          classSelect.innerHTML =
+            `<option value="">— Semua / Pilih Kelas —</option>` +
+            classes.map((k) => `<option value="${escapeHtml(k)}" ${k === state.currentStudentClass ? "selected" : ""}>${escapeHtml(k)}</option>`).join("");
+        }
+      }
+
+      renderStudentDropdownList();
+    }
+
+    function openStudentDropdown() {
+      const menu = document.getElementById("student-dropdown-menu");
+      if (!menu) return;
+      renderStudentDropdownList();
+      menu.classList.remove("hidden");
+    }
+
+    function closeStudentDropdown() {
+      const menu = document.getElementById("student-dropdown-menu");
+      if (menu) menu.classList.add("hidden");
+    }
+
+    function toggleStudentDropdown() {
+      const menu = document.getElementById("student-dropdown-menu");
+      if (!menu) return;
+      if (menu.classList.contains("hidden")) openStudentDropdown();
+      else closeStudentDropdown();
+    }
+
+    function toggleShowAllStudents() {
+      state.showAllStudentsInDropdown = !state.showAllStudentsInDropdown;
+      renderStudentDropdownList();
+    }
+
+    function clearStudentNameSelection() {
+      state.currentStudentName = "";
+      persistState();
+      renderStudentIdentityControls();
+      openStudentDropdown();
+      document.getElementById("input-student-name")?.focus();
+    }
+
+    function handleStudentNameInput(val) {
+      state.currentStudentName = val;
+      const clearBtn = document.getElementById("btn-clear-student-name");
+      if (clearBtn) {
+        if (val.trim()) clearBtn.classList.remove("hidden");
+        else clearBtn.classList.add("hidden");
+      }
+      persistState();
+      openStudentDropdown();
+    }
+
+    function handleClassSelectChange(val) {
+      state.currentStudentClass = val;
+      state.showAllStudentsInDropdown = false;
+      persistState();
+      renderStudentDropdownList();
+    }
+
+    function selectStudentFromDropdown(nama, kelas) {
+      state.currentStudentName = nama;
+      if (kelas) state.currentStudentClass = kelas;
+      persistState();
+      renderStudentIdentityControls();
+      closeStudentDropdown();
+    }
+
+    function renderStudentDropdownList() {
+      const listEl = document.getElementById("student-dropdown-list");
+      const infoEl = document.getElementById("student-dropdown-info");
+      const toggleBtn = document.getElementById("btn-toggle-all-students");
+      if (!listEl) return;
+
+      if (state.students.length === 0) {
+        if (infoEl) infoEl.textContent = "Belum ada daftar siswa";
+        if (toggleBtn) toggleBtn.classList.add("hidden");
+        listEl.innerHTML = `
+          <div class="p-4 text-center text-xs text-slate-500">
+            Silakan klik <strong>Impor Excel Siswa</strong> atau <strong>Sinkron Sheets</strong> di atas, atau ketik nama siswa secara manual.
+          </div>
+        `;
+        return;
+      }
+
+      const query = (state.currentStudentName || "").trim().toLowerCase();
+      const selectedClass = state.currentStudentClass;
+
+      // Jika teks di kotak input sama persis dengan nama siswa yang sudah dipilih,
+      // tetap tampilkan seluruh siswa di kelas tersebut agar mudah berpindah ke siswa lain.
+      const isExactSelectedStudent = query && state.students.some((s) => s.nama.toLowerCase() === query);
+
+      let filtered = state.students;
+      if (selectedClass && !state.showAllStudentsInDropdown) {
+        filtered = filtered.filter((s) => s.kelas === selectedClass);
+      }
+      if (query && !isExactSelectedStudent) {
+        filtered = filtered.filter(
+          (s) => s.nama.toLowerCase().includes(query) || (s.kelas || "").toLowerCase().includes(query)
+        );
+      }
+
+      if (infoEl) {
+        infoEl.textContent = selectedClass && !state.showAllStudentsInDropdown
+          ? `Menampilkan ${filtered.length} siswa kelas ${selectedClass}`
+          : `Menampilkan ${filtered.length} dari ${state.students.length} siswa`;
+      }
+      if (toggleBtn) {
+        if (selectedClass) {
+          toggleBtn.classList.remove("hidden");
+          toggleBtn.textContent = state.showAllStudentsInDropdown ? `Filter Kelas ${selectedClass}` : "Tampilkan Semua";
+        } else {
+          toggleBtn.classList.add("hidden");
+        }
+      }
+
+      if (filtered.length === 0) {
+        listEl.innerHTML = `<div class="p-3.5 text-center text-xs text-slate-400">Tidak ada siswa yang cocok dengan pencarian.</div>`;
+        return;
+      }
+
+      listEl.innerHTML = filtered.slice(0, 150).map((s) => {
+        const isCurrent = s.nama.toLowerCase() === query && (!s.kelas || !selectedClass || s.kelas === selectedClass);
+        return `
+          <button type="button"
+            onclick="selectStudentFromDropdown(${JSON.stringify(s.nama).replace(/"/g, '&quot;')}, ${JSON.stringify(s.kelas || '').replace(/"/g, '&quot;')})"
+            class="w-full px-3.5 py-3 text-left active:bg-blue-100 hover:bg-blue-50 flex items-center justify-between gap-2 transition-colors ${isCurrent ? 'bg-blue-50/70' : ''}">
+            <span class="text-sm font-semibold ${isCurrent ? 'text-[#1A47E8]' : 'text-slate-800'} truncate">${escapeHtml(s.nama)}</span>
+            <div class="flex items-center gap-1.5 shrink-0">
+              ${isCurrent ? `<span class="text-[10px] font-extrabold text-[#1A47E8]">Dipilih</span>` : ""}
+              ${s.kelas ? `<span class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[11px] font-bold">${escapeHtml(s.kelas)}</span>` : ""}
+            </div>
+          </button>
+        `;
+      }).join("");
+    }
+
+    document.addEventListener("click", (e) => {
+      const wrapper = document.getElementById("student-dropdown-wrapper");
+      if (wrapper && !wrapper.contains(e.target)) {
+        closeStudentDropdown();
+      }
+    });
+
+    // =========================================================================
+    // 4. GEMINI AI API & KOMPRESI GAMBAR
+    // =========================================================================
+    function getEffectiveGeminiKey() {
+      return (state.cloudConfig.customGeminiKey || "").trim() || apiKey;
+    }
+
+    async function compressImageFile(file, maxDim = 1400, quality = 0.8) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error("Gagal membaca file gambar."));
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onerror = () => reject(new Error("Format gambar tidak valid."));
+          img.onload = () => {
+            let { width, height } = img;
+            if (width > maxDim || height > maxDim) {
+              if (width > height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            ctx.fillStyle = "#FFFFFF";
+            ctx.fillRect(0, 0, width, height);
+            ctx.drawImage(img, 0, 0, width, height);
+            const dataUrl = canvas.toDataURL("image/jpeg", quality);
+            const base64 = dataUrl.split(",")[1];
+            resolve({ dataUrl, base64, mimeType: "image/jpeg" });
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function callGeminiAPI(parts, responseMimeType = "application/json") {
+      const key = getEffectiveGeminiKey();
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(key)}`;
+      const body = {
+        contents: [{ role: "user", parts }],
+        generationConfig: {
+          temperature: 0.2,
+          ...(responseMimeType ? { responseMimeType } : {})
+        }
+      };
+
+      let lastErr = null;
+      const delays = [800, 1800, 3500];
+      for (let attempt = 0; attempt <= delays.length; attempt++) {
+        try {
+          const res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+          });
+
+          const rawText = await res.text();
+          let data;
+          try {
+            data = JSON.parse(rawText);
+          } catch (parseErr) {
+            throw new Error(`Server mengembalikan respons non-JSON (HTTP ${res.status}). Silakan muat ulang halaman dan coba lagi.`);
+          }
+
+          if (!res.ok) {
+            const msg = data?.error?.message || `HTTP ${res.status}`;
+            if ((res.status === 429 || res.status >= 500) && attempt < delays.length) {
+              await new Promise((r) => setTimeout(r, delays[attempt]));
+              continue;
+            }
+            throw new Error(msg);
+          }
+
+          const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || "";
+          if (!text) throw new Error("Respons AI kosong.");
+          return text;
+        } catch (err) {
+          lastErr = err;
+          if (attempt < delays.length && !String(err.message || "").includes("API key")) {
+            await new Promise((r) => setTimeout(r, delays[attempt]));
+          } else {
+            break;
+          }
+        }
+      }
+      throw lastErr || new Error("Gagal menghubungi layanan AI.");
+    }
+
+    function parseJsonFromAI(rawText) {
+      const cleaned = String(rawText || "")
+        .replace(/^```json\s*/i, "")
+        .replace(/^```\s*/i, "")
+        .replace(/```\s*$/i, "")
+        .trim();
+      return JSON.parse(cleaned);
+    }
+
+    // =========================================================================
+    // 5. TAB 1: SCAN & PERIKSA
+    // =========================================================================
+    function getActiveQuestions() {
+      return state.questions
+        .filter((q) => q.aktif)
+        .sort((a, b) => String(a.noSoal || "").localeCompare(String(b.noSoal || ""), "id", { numeric: true }));
+    }
+
+    function getOrInitScanEntry(qId) {
+      if (!state.scanData[qId]) {
+        state.scanData[qId] = {
+          mode: "foto",
+          imageDataUrl: "",
+          imageBase64: "",
+          imageMime: "image/jpeg",
+          textAnswer: "",
+          grading: null,
+          error: "",
+          isGrading: false
+        };
+      }
+      return state.scanData[qId];
+    }
+
+    function resetCurrentStudentSession() {
+      state.scanData = {};
+      renderScanTab();
+      showToast("Foto & hasil koreksi sementara direset.", "info");
+    }
+
+    function setScanMode(qId, mode) {
+      const entry = getOrInitScanEntry(qId);
+      entry.mode = mode;
+      entry.error = "";
+      renderScanTab();
+    }
+
+    function handleTextAnswerInput(qId, value) {
+      const entry = getOrInitScanEntry(qId);
+      entry.textAnswer = value;
+      entry.error = "";
+      updateBatchStatusLabel();
+    }
+
+    async function handleSingleAnswerImageUpload(qId, event) {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (!file) return;
+      try {
+        const compressed = await compressImageFile(file);
+        const entry = getOrInitScanEntry(qId);
+        entry.mode = "foto";
+        entry.imageDataUrl = compressed.dataUrl;
+        entry.imageBase64 = compressed.base64;
+        entry.imageMime = compressed.mimeType;
+        entry.error = "";
+        entry.grading = null;
+        renderScanTab();
+        showToast("Foto jawaban berhasil dimuat.", "success");
+      } catch (err) {
+        showToast("Gagal memproses gambar: " + err.message, "error");
+      }
+    }
+
+    function removeAnswerImage(qId) {
+      const entry = getOrInitScanEntry(qId);
+      entry.imageDataUrl = "";
+      entry.imageBase64 = "";
+      entry.grading = null;
+      entry.error = "";
+      renderScanTab();
+    }
+
+    async function handleBatchMultiUpload(event) {
+      const files = Array.from(event.target.files || []);
+      event.target.value = "";
+      if (files.length === 0) return;
+
+      const activeQs = getActiveQuestions();
+      if (activeQs.length === 0) {
+        showToast("Belum ada soal aktif untuk dipasangkan dengan gambar.", "warning");
+        return;
+      }
+
+      files.sort((a, b) => a.name.localeCompare(b.name, "id", { numeric: true }));
+      const limit = Math.min(files.length, activeQs.length);
+      let loaded = 0;
+
+      for (let i = 0; i < limit; i++) {
+        try {
+          const compressed = await compressImageFile(files[i]);
+          const q = activeQs[i];
+          const entry = getOrInitScanEntry(q.id);
+          entry.mode = "foto";
+          entry.imageDataUrl = compressed.dataUrl;
+          entry.imageBase64 = compressed.base64;
+          entry.imageMime = compressed.mimeType;
+          entry.grading = null;
+          entry.error = "";
+          loaded++;
+        } catch (err) {
+          console.warn("Gagal memuat gambar ke-" + (i + 1), err);
+        }
+      }
+
+      renderScanTab();
+      showToast(`${loaded} gambar jawaban dipasangkan ke soal aktif. Klik Periksa Semua untuk mulai mengoreksi.`, "success");
+    }
+
+    async function handleBatchSingleSheetUpload(event) {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (!file) return;
+
+      const activeQs = getActiveQuestions();
+      if (activeQs.length === 0) {
+        showToast("Belum ada soal aktif.", "warning");
+        return;
+      }
+
+      try {
+        const compressed = await compressImageFile(file);
+        activeQs.forEach((q) => {
+          const entry = getOrInitScanEntry(q.id);
+          entry.mode = "foto";
+          entry.imageDataUrl = compressed.dataUrl;
+          entry.imageBase64 = compressed.base64;
+          entry.imageMime = compressed.mimeType;
+          entry.grading = null;
+          entry.error = "";
+        });
+        renderScanTab();
+        showToast(`1 lembar foto diterapkan ke semua (${activeQs.length}) soal aktif!`, "success");
+      } catch (err) {
+        showToast("Gagal memproses gambar: " + err.message, "error");
+      }
+    }
+
+    function hasUploadOrText(entry) {
+      if (!entry) return false;
+      if (entry.mode === "teks") return Boolean((entry.textAnswer || "").trim());
+      return Boolean(entry.imageBase64);
+    }
+
+    function updateBatchStatusLabel() {
+      const activeQs = getActiveQuestions();
+      const readyCount = activeQs.filter((q) => hasUploadOrText(state.scanData[q.id])).length;
+      const statusEl = document.getElementById("batch-upload-status");
+      if (statusEl) {
+        statusEl.textContent = readyCount > 0
+          ? `${readyCount} dari ${activeQs.length} soal siap diperiksa. Klik Periksa Semua untuk mengoreksi otomatis.`
+          : `Unggah foto tiap soal atau pilih banyak gambar sekaligus, kemudian klik Periksa Semua.`;
+      }
+      const btnTop = document.getElementById("btn-grade-all-top");
+      const btnBottom = document.getElementById("btn-grade-all-bottom");
+      const disabled = isBatchGrading || readyCount === 0;
+      if (btnTop) btnTop.disabled = disabled;
+      if (btnBottom) btnBottom.disabled = disabled;
+    }
+
+    async function gradeSingleQuestion(qId, silent = false) {
+      const q = state.questions.find((item) => item.id === qId);
+      if (!q) return false;
+      const entry = getOrInitScanEntry(qId);
+
+      if (!hasUploadOrText(entry)) {
+        entry.error = entry.mode === "teks"
+          ? "Silakan ketik teks jawaban siswa terlebih dahulu."
+          : "Silakan ambil foto atau unggah gambar jawaban siswa terlebih dahulu.";
+        renderScanTab();
+        return false;
+      }
+
+      entry.isGrading = true;
+      entry.error = "";
+      renderScanTab();
+
+      const maxQ = getQuestionMaxScore(q);
+      const rubrikDesc = (q.rubrik || [])
+        .map((r, i) => `${i + 1}. ${r.nama} (Maks ${r.skorMaks} poin): ${r.deskripsi}`)
+        .join("\n");
+
+      const prompt = [
+        `Anda adalah guru Matematika SMP Kelas 9 yang objektif, teliti, dan adil dalam mengoreksi soal uraian.`,
+        `Fokus HANYA pada jawaban siswa untuk SOAL NO. ${q.noSoal} (Topik: ${q.topik}). Jika foto berisi beberapa nomor soal, baca bagian yang sesuai dengan Nomor ${q.noSoal}.`,
+        ``,
+        `SOAL NO. ${q.noSoal}:`,
+        q.teksSoal,
+        ``,
+        `KUNCI JAWABAN ACUAN:`,
+        q.kunciJawaban,
+        ``,
+        `KRITERIA RUBRIK PENILAIAN (Total Maksimal = ${maxQ} poin):`,
+        rubrikDesc,
+        ``,
+        entry.mode === "teks"
+          ? `JAWABAN SISWA (TEKS):\n${entry.textAnswer}`
+          : `JAWABAN SISWA: Lihat gambar terlampir. Transkripsikan jawaban siswa untuk Soal No. ${q.noSoal} secara ringkas dan jelas.`,
+        ``,
+        `ATURAN PENILAIAN:`,
+        `- Berikan skor untuk setiap kriteria antara 0 sampai skorMaks kriteria tersebut (boleh desimal kelipatan 0.5, misal 0.5, 1, 1.5).`,
+        `- Jumlah skor seluruh kriteria tidak boleh melebihi ${maxQ}.`,
+        `- Kembalikan HANYA JSON valid dengan format:`,
+        `{`,
+        `  "transkripsi": "ringkasan transkripsi jawaban siswa untuk nomor ini",`,
+        `  "catatanUmum": "umpan balik singkat 1-2 kalimat dalam bahasa Indonesia",`,
+        `  "rincianKriteria": [`,
+        `    { "index": 0, "skor": 1.5, "komentar": "alasan singkat" }`,
+        `  ]`,
+        `}`
+      ].join("\n");
+
+      const parts = [{ text: prompt }];
+      if (entry.mode === "foto" && entry.imageBase64) {
+        parts.push({
+          inlineData: {
+            mimeType: entry.imageMime || "image/jpeg",
+            data: entry.imageBase64
+          }
+        });
+      }
+
+      try {
+        const raw = await callGeminiAPI(parts, "application/json");
+        const parsed = parseJsonFromAI(raw);
+
+        const criteriaResults = (q.rubrik || []).map((r, idx) => {
+          const found = (parsed.rincianKriteria || []).find((c) => Number(c.index) === idx) || (parsed.rincianKriteria || [])[idx];
+          const maxVal = Number(r.skorMaks) || 0;
+          const rawScore = Number(found?.skor);
+          const clamped = Number.isFinite(rawScore) ? Math.max(0, Math.min(maxVal, roundScore(rawScore))) : 0;
+          return {
+            nama: r.nama,
+            skorMaks: maxVal,
+            skor: clamped,
+            komentar: String(found?.komentar || "")
+          };
+        });
+
+        const totalSkor = roundScore(criteriaResults.reduce((s, c) => s + c.skor, 0));
+        entry.grading = {
+          transkripsi: String(parsed.transkripsi || (entry.mode === "teks" ? entry.textAnswer : "")),
+          catatanUmum: String(parsed.catatanUmum || ""),
+          rincianKriteria: criteriaResults,
+          totalSkor
+        };
+        entry.isGrading = false;
+        entry.error = "";
+        renderScanTab();
+        if (!silent) showToast(`Soal No. ${q.noSoal} selesai diperiksa (Skor: ${formatScore(totalSkor)} / ${formatScore(maxQ)}).`, "success");
+        return true;
+      } catch (err) {
+        entry.isGrading = false;
+        entry.error = err.message || "Gagal memeriksa jawaban.";
+        renderScanTab();
+        if (!silent) showToast(`Gagal memeriksa No. ${q.noSoal}: ${entry.error}`, "error");
+        return false;
+      }
+    }
+
+    async function gradeAllUploadedAnswers() {
+      if (isBatchGrading) return;
+      const activeQs = getActiveQuestions();
+      const targets = activeQs.filter((q) => hasUploadOrText(state.scanData[q.id]));
+      if (targets.length === 0) {
+        showToast("Belum ada jawaban yang diunggah atau diisi.", "warning");
+        return;
+      }
+
+      isBatchGrading = true;
+      updateBatchStatusLabel();
+      showToast(`Memeriksa ${targets.length} soal secara otomatis...`, "info");
+
+      let okCount = 0;
+      for (let i = 0; i < targets.length; i++) {
+        const ok = await gradeSingleQuestion(targets[i].id, true);
+        if (ok) okCount++;
+      }
+
+      isBatchGrading = false;
+      renderScanTab();
+      showToast(`Pemeriksaan massal selesai (${okCount}/${targets.length} soal berhasil dinilai).`, okCount > 0 ? "success" : "warning");
+    }
+
+    function updateCriterionAwardedScore(qId, critIdx, rawVal) {
+      const entry = state.scanData[qId];
+      if (!entry || !entry.grading || !entry.grading.rincianKriteria[critIdx]) return;
+      const crit = entry.grading.rincianKriteria[critIdx];
+      const num = Math.max(0, Math.min(crit.skorMaks, roundScore(rawVal)));
+      crit.skor = num;
+      entry.grading.totalSkor = roundScore(entry.grading.rincianKriteria.reduce((s, c) => s + (Number(c.skor) || 0), 0));
+      renderScanSummaryBar();
+      const totalBadge = document.getElementById(`scan-q-total-${qId}`);
+      if (totalBadge) totalBadge.textContent = `${formatScore(entry.grading.totalSkor)} / ${formatScore(getQuestionMaxScore(state.questions.find((x) => x.id === qId)))}`;
+    }
+
+    function renderScanSummaryBar() {
+      const activeQs = getActiveQuestions();
+      let checked = 0;
+      let totalScore = 0;
+      let totalMax = 0;
+
+      activeQs.forEach((q) => {
+        totalMax += getQuestionMaxScore(q);
+        const entry = state.scanData[q.id];
+        if (entry && entry.grading) {
+          checked++;
+          totalScore += Number(entry.grading.totalSkor) || 0;
+        }
+      });
+
+      const elCount = document.getElementById("summary-checked-count");
+      const elTotal = document.getElementById("summary-total-score");
+      const elMax = document.getElementById("summary-max-score");
+      const btnSave = document.getElementById("btn-save-recap");
+
+      if (elCount) elCount.textContent = `Ringkasan Paket Nilai (${checked} dari ${activeQs.length} soal diperiksa)`;
+      if (elTotal) elTotal.textContent = formatScore(totalScore);
+      if (elMax) elMax.textContent = `/ ${formatScore(totalMax || state.bobotUraianMaks)}`;
+      if (btnSave) btnSave.disabled = checked === 0;
+    }
+
+    function renderScanTab() {
+      renderStudentIdentityControls();
+      const container = document.getElementById("scan-questions-container");
+      if (!container) return;
+
+      const activeQs = getActiveQuestions();
+      if (activeQs.length === 0) {
+        container.innerHTML = `
+          <div class="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-3">
+            <p class="text-sm font-bold text-slate-700">Belum ada soal aktif.</p>
+            <p class="text-xs text-slate-500">Buka tab <strong>2. Soal &amp; Rubrik</strong> untuk menambah atau mengaktifkan soal uraian.</p>
+            <button type="button" onclick="switchTab('soal')"
+              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#1A47E8] text-white text-xs font-bold">
+              <span>Buka Soal &amp; Rubrik</span>
+            </button>
+          </div>
+        `;
+        updateBatchStatusLabel();
+        renderScanSummaryBar();
+        lucide.createIcons();
+        return;
+      }
+
+      container.innerHTML = activeQs.map((q, idx) => {
+        const entry = getOrInitScanEntry(q.id);
+        const maxQ = getQuestionMaxScore(q);
+        const stepBadge = idx + 2;
+
+        return `
+          <article class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 sm:p-6 space-y-4">
+            <!-- Header Soal -->
+            <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+              <div class="flex items-start gap-2.5 sm:gap-3 min-w-0">
+                <span class="w-7 h-7 rounded-full bg-[#1A47E8] text-white text-xs font-extrabold flex items-center justify-center shrink-0 mt-0.5">${stepBadge}</span>
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-1.5">
+                    <span class="text-xs font-extrabold text-[#1A47E8]">Soal No. ${escapeHtml(q.noSoal)} · ${escapeHtml(q.topik)}</span>
+                    ${entry.grading ? `<span id="scan-q-total-${q.id}" class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-extrabold">${formatScore(entry.grading.totalSkor)} / ${formatScore(maxQ)}</span>` : ""}
+                  </div>
+                  <p class="text-xs sm:text-sm text-slate-600 mt-1 line-clamp-2">${escapeHtml(q.teksSoal)}</p>
+                </div>
+              </div>
+
+              <!-- Toggle Foto Lembar / Tulis Teks -->
+              <div class="inline-flex p-1 rounded-xl bg-slate-100 border border-slate-200/80 self-start shrink-0">
+                <button type="button" onclick="setScanMode('${q.id}', 'foto')"
+                  class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${entry.mode === 'foto' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'}">
+                  Foto Lembar
+                </button>
+                <button type="button" onclick="setScanMode('${q.id}', 'teks')"
+                  class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${entry.mode === 'teks' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'}">
+                  Tulis Teks
+                </button>
+              </div>
+            </div>
+
+            <!-- Grid Kiri (Input Jawaban) & Kanan (Rubrik & Hasil) -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5">
+              <!-- Kolom Kiri -->
+              <div class="lg:col-span-5 space-y-3">
+                ${entry.mode === "foto" ? `
+                  <div class="grid grid-cols-2 gap-2">
+                    <label for="cam-${q.id}"
+                      class="cursor-pointer inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-blue-50 active:bg-blue-100 hover:bg-blue-100 border border-blue-200 text-[#1A47E8] text-xs font-bold transition-colors">
+                      <i data-lucide="camera" class="w-4 h-4"></i>
+                      <span>Foto Jawaban</span>
+                    </label>
+                    <input type="file" id="cam-${q.id}" accept="image/*" capture="environment" class="hidden" onchange="handleSingleAnswerImageUpload('${q.id}', event)" />
+
+                    <label for="up-${q.id}"
+                      class="cursor-pointer inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-white active:bg-slate-50 hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold transition-colors">
+                      <i data-lucide="image-plus" class="w-4 h-4"></i>
+                      <span>Upload Gambar</span>
+                    </label>
+                    <input type="file" id="up-${q.id}" accept="image/*" class="hidden" onchange="handleSingleAnswerImageUpload('${q.id}', event)" />
+                  </div>
+
+                  ${entry.imageDataUrl ? `
+                    <div class="relative rounded-xl border border-slate-200 overflow-hidden bg-slate-50">
+                      <img src="${entry.imageDataUrl}" alt="Foto jawaban No. ${escapeHtml(q.noSoal)}" class="w-full max-h-56 object-contain bg-white" />
+                      <button type="button" onclick="removeAnswerImage('${q.id}')" title="Hapus gambar"
+                        class="absolute top-2 right-2 p-1.5 rounded-lg bg-slate-900/70 hover:bg-rose-600 text-white transition-colors">
+                        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                      </button>
+                    </div>
+                  ` : `
+                    <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-5 text-center text-xs text-slate-400">
+                      Belum ada foto jawaban untuk Soal No. ${escapeHtml(q.noSoal)}.
+                    </div>
+                  `}
+                ` : `
+                  <textarea rows="5" oninput="handleTextAnswerInput('${q.id}', this.value)"
+                    placeholder="Ketik atau tempelkan jawaban uraian siswa untuk Soal No. ${escapeHtml(q.noSoal)}..."
+                    class="w-full p-3 rounded-xl border border-slate-200 text-base sm:text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30">${escapeHtml(entry.textAnswer)}</textarea>
+                `}
+
+                ${entry.error ? `
+                  <div class="rounded-xl bg-rose-50 border border-rose-200 px-3.5 py-2.5 text-xs font-medium text-rose-700">
+                    ${escapeHtml(entry.error)}
+                  </div>
+                ` : ""}
+
+                <button type="button" onclick="gradeSingleQuestion('${q.id}')" ${entry.isGrading ? "disabled" : ""}
+                  class="w-full py-3 px-4 rounded-xl bg-[#1A47E8] active:bg-[#153AC4] hover:bg-[#153AC4] text-white text-xs sm:text-sm font-bold shadow-sm inline-flex items-center justify-center gap-2 transition-colors disabled:opacity-60">
+                  <i data-lucide="${entry.isGrading ? 'loader-2' : 'sparkles'}" class="w-4 h-4 ${entry.isGrading ? 'animate-spin' : ''}"></i>
+                  <span>${entry.isGrading ? `Sedang Memeriksa No. ${escapeHtml(q.noSoal)}...` : `Periksa Jawaban No. ${escapeHtml(q.noSoal)}`}</span>
+                </button>
+              </div>
+
+              <!-- Kolom Kanan: Rubrik & Hasil Koreksi -->
+              <div class="lg:col-span-7 rounded-2xl border border-slate-200/80 bg-slate-50/50 p-4 space-y-3">
+                <div class="flex items-center justify-between gap-2 pb-2 border-b border-slate-200/80">
+                  <span class="text-xs font-bold text-slate-800">Kriteria Rubrik Soal No. ${escapeHtml(q.noSoal)}</span>
+                  <span class="text-xs font-extrabold text-slate-700">Total ${formatScore(maxQ)} Poin</span>
+                </div>
+
+                <div class="space-y-3">
+                  ${(q.rubrik || []).map((r, rIdx) => {
+                    const gradedCrit = entry.grading?.rincianKriteria?.[rIdx];
+                    return `
+                      <div class="flex items-start justify-between gap-3 ${rIdx > 0 ? 'pt-2.5 border-t border-slate-200/60' : ''}">
+                        <div class="min-w-0 flex-1">
+                          <p class="text-xs font-bold text-slate-800">${rIdx + 1}. ${escapeHtml(r.nama)}</p>
+                          <p class="text-[11px] text-slate-500 mt-0.5 leading-relaxed">${escapeHtml(r.deskripsi)}</p>
+                          ${gradedCrit?.komentar ? `<p class="text-[11px] text-[#1A47E8] font-medium mt-1">AI: ${escapeHtml(gradedCrit.komentar)}</p>` : ""}
+                        </div>
+                        <div class="shrink-0 text-right">
+                          ${gradedCrit ? `
+                            <div class="inline-flex items-center gap-1">
+                              <input type="number" min="0" max="${r.skorMaks}" step="0.5" value="${gradedCrit.skor}"
+                                onchange="updateCriterionAwardedScore('${q.id}', ${rIdx}, this.value)"
+                                class="w-14 px-1.5 py-1 rounded-lg border border-blue-300 bg-white text-xs font-extrabold text-[#1A47E8] text-center" />
+                              <span class="text-[11px] font-bold text-slate-400">/ ${formatScore(r.skorMaks)}</span>
+                            </div>
+                          ` : `
+                            <span class="text-xs font-extrabold text-slate-700">${formatScore(r.skorMaks)}</span>
+                          `}
+                        </div>
+                      </div>
+                    `;
+                  }).join("")}
+                </div>
+
+                ${entry.grading ? `
+                  <div class="mt-3 pt-3 border-t border-slate-200 space-y-1.5">
+                    ${entry.grading.catatanUmum ? `
+                      <div class="rounded-xl bg-emerald-50 border border-emerald-200/80 p-2.5 text-xs text-emerald-900">
+                        <span class="font-bold">Catatan AI:</span> ${escapeHtml(entry.grading.catatanUmum)}
+                      </div>
+                    ` : ""}
+                    ${entry.grading.transkripsi ? `
+                      <details class="text-[11px] text-slate-600">
+                        <summary class="cursor-pointer font-bold text-slate-500 hover:text-slate-800">Lihat Transkripsi Jawaban Siswa</summary>
+                        <p class="mt-1 p-2.5 rounded-lg bg-white border border-slate-200 whitespace-pre-wrap">${escapeHtml(entry.grading.transkripsi)}</p>
+                      </details>
+                    ` : ""}
+                  </div>
+                ` : ""}
+              </div>
+            </div>
+          </article>
+        `;
+      }).join("");
+
+      updateBatchStatusLabel();
+      renderScanSummaryBar();
+      lucide.createIcons();
+    }
+
+    async function savePackageToRecap() {
+      const nama = (state.currentStudentName || "").trim();
+      const kelas = (state.currentStudentClass || "").trim();
+      if (!nama) {
+        showToast("Silakan pilih atau ketik Nama Siswa terlebih dahulu.", "warning");
+        document.getElementById("input-student-name")?.focus();
+        return;
+      }
+
+      const activeQs = getActiveQuestions();
+      const rincian = [];
+      const imagesMap = {};
+
+      activeQs.forEach((q) => {
+        const entry = state.scanData[q.id];
+        if (entry && entry.grading) {
+          const cleanNo = normalizeNoSoal(q.noSoal);
+          rincian.push({
+            noSoal: cleanNo,
+            topik: q.topik || "Uraian",
+            skor: roundScore(entry.grading.totalSkor),
+            skorMaks: getQuestionMaxScore(q),
+            catatanUmum: entry.grading.catatanUmum || "",
+            transkripsi: entry.grading.transkripsi || ""
+          });
+          if (entry.imageBase64) {
+            imagesMap[cleanNo] = {
+              base64: entry.imageBase64,
+              mimeType: entry.imageMime || "image/jpeg"
+            };
+          }
+        }
+      });
+
+      if (rincian.length === 0) {
+        showToast("Belum ada soal yang diperiksa untuk disimpan.", "warning");
+        return;
+      }
+
+      const newRecap = {
+        id: `rec-${Date.now()}`,
+        timestamp: new Date().toLocaleString("id-ID"),
+        nama,
+        kelas,
+        cloudSynced: false,
+        driveLinks: {},
+        rincian
+      };
+
+      state.recaps = normalizeAndMergeRecaps([...state.recaps, newRecap]);
+      const savedEntry = state.recaps.find(
+        (r) => r.nama.toLowerCase() === nama.toLowerCase() && (r.kelas || "").toLowerCase() === kelas.toLowerCase()
+      );
+
+      persistState();
+      updateGlobalCounters();
+      showToast(`Nilai ${nama} berhasil disimpan ke Rekap & Kirim!`, "success");
+
+      if (state.cloudConfig.gasUrl && state.cloudConfig.autoSync && savedEntry) {
+        syncSingleRecapToCloud(savedEntry, imagesMap);
+      }
+
+      state.scanData = {};
+      switchTab("rekap");
+    }
+
+    // =========================================================================
+    // 6. TAB 2: SOAL, KUNCI JAWABAN & RUBRIK
+    // =========================================================================
+    function renderWeightSettings() {
+      const inpBobot = document.getElementById("input-bobot-maks");
+      const inpJml = document.getElementById("input-target-jml-soal");
+      const lblPerQ = document.getElementById("weight-per-question-label");
+      if (inpBobot) inpBobot.value = state.bobotUraianMaks;
+      if (inpJml) inpJml.value = state.targetJumlahSoal;
+      if (lblPerQ) lblPerQ.textContent = formatScore(getDefaultPerQuestionWeight());
+
+      const activeTotal = roundScore(getActiveQuestions().reduce((s, q) => s + getQuestionMaxScore(q), 0));
+      const badge = document.getElementById("active-weight-summary-badge");
+      if (badge) {
+        badge.textContent = `Total Bobot Aktif: ${formatScore(activeTotal)} / ${formatScore(state.bobotUraianMaks)} Poin`;
+        badge.className = Math.abs(activeTotal - state.bobotUraianMaks) < 0.05
+          ? "px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold"
+          : "px-3 py-1 rounded-full bg-blue-50 text-[#1A47E8] text-xs font-bold";
+      }
+    }
+
+    function updateWeightSettings() {
+      const bobotVal = Number(document.getElementById("input-bobot-maks")?.value) || 30;
+      const jmlVal = Number(document.getElementById("input-target-jml-soal")?.value) || 5;
+      state.bobotUraianMaks = Math.max(1, Math.min(100, bobotVal));
+      state.targetJumlahSoal = Math.max(1, Math.min(20, Math.round(jmlVal)));
+      persistState();
+      renderWeightSettings();
+      if (!state.editingQuestionId) {
+        const inpMax = document.getElementById("input-soal-max-poin");
+        if (inpMax) inpMax.value = getDefaultPerQuestionWeight();
+        updateRubricTotalBadge();
+      }
+      if (state.cloudConfig.gasUrl && state.cloudConfig.autoSync) {
+        syncAppConfigToCloud({ silent: true });
+      }
+    }
+
+    function rescaleRubricToTarget(rubrik, targetTotal) {
+      if (!Array.isArray(rubrik) || rubrik.length === 0) return [];
+      const currentTotal = rubrik.reduce((s, r) => s + (Number(r.skorMaks) || 0), 0);
+      let remaining = roundScore(targetTotal);
+      return rubrik.map((r, idx) => {
+        if (idx === rubrik.length - 1) {
+          return { ...r, skorMaks: Math.max(0.5, roundScore(remaining)) };
+        }
+        const ratio = currentTotal > 0 ? (Number(r.skorMaks) || 0) / currentTotal : 1 / rubrik.length;
+        const val = Math.max(0.5, Math.round(targetTotal * ratio * 2) / 2);
+        remaining = roundScore(remaining - val);
+        return { ...r, skorMaks: val };
+      });
+    }
+
+    function autoDistributeWeightsToActiveQuestions() {
+      const activeQs = getActiveQuestions();
+      if (activeQs.length === 0) {
+        showToast("Belum ada soal aktif untuk dibagi bobotnya.", "warning");
+        return;
+      }
+      const targetTotal = Number(state.bobotUraianMaks) || 30;
+      const count = activeQs.length;
+      const basePerQ = Math.floor((targetTotal / count) * 2) / 2;
+      let remainder = roundScore(targetTotal - basePerQ * count);
+
+      activeQs.forEach((q, idx) => {
+        let qTarget = basePerQ;
+        if (remainder >= 0.5) {
+          qTarget = roundScore(qTarget + 0.5);
+          remainder = roundScore(remainder - 0.5);
+        } else if (idx === count - 1 && remainder > 0) {
+          qTarget = roundScore(qTarget + remainder);
+          remainder = 0;
+        }
+        q.rubrik = rescaleRubricToTarget(q.rubrik, qTarget);
+      });
+
+      state.targetJumlahSoal = count;
+      persistState();
+      renderSoalTab();
+      if (state.cloudConfig.gasUrl && state.cloudConfig.autoSync) {
+        syncAppConfigToCloud({ silent: true });
+      }
+      showToast(`Bobot ${count} soal aktif otomatis dibagi merata (Total ${formatScore(targetTotal)} poin)!`, "success");
+    }
+
+    function renderSoalTab() {
+      renderWeightSettings();
+      renderRubricEditor();
+      updateRubricTotalBadge();
+      updateAiGeneratorButtonState();
+      renderSavedQuestionsList();
+      lucide.createIcons();
+    }
+
+    function resetQuestionForm() {
+      state.editingQuestionId = null;
+      state.draftRubrik = [];
+      const nextNo = state.questions.length > 0
+        ? String(Math.max(...state.questions.map((q) => parseInt(q.noSoal, 10) || 0)) + 1)
+        : "1";
+
+      const elTitle = document.getElementById("form-soal-title");
+      const elNo = document.getElementById("input-no-soal");
+      const elTopik = document.getElementById("input-topik-soal");
+      const elMax = document.getElementById("input-soal-max-poin");
+      const elTeks = document.getElementById("input-teks-soal");
+      const elKunci = document.getElementById("input-kunci-jawaban");
+      const elVerify = document.getElementById("chk-verify-key");
+      const elBtnSave = document.getElementById("btn-save-soal-label");
+
+      if (elTitle) elTitle.textContent = "Input Soal Baru, Kunci Jawaban & Rubrik";
+      if (elNo) elNo.value = nextNo;
+      if (elTopik) elTopik.value = "";
+      if (elMax) elMax.value = getDefaultPerQuestionWeight();
+      if (elTeks) elTeks.value = "";
+      if (elKunci) elKunci.value = "";
+      if (elVerify) elVerify.checked = false;
+      if (elBtnSave) elBtnSave.textContent = "Simpan Soal, Kunci & Rubrik";
+
+      renderRubricEditor();
+      updateRubricTotalBadge();
+      updateAiGeneratorButtonState();
+    }
+
+    function updateAiGeneratorButtonState() {
+      const teks = (document.getElementById("input-teks-soal")?.value || "").trim();
+      const btn = document.getElementById("btn-ai-generate-rubric");
+      if (btn) btn.disabled = teks.length < 5;
+    }
+
+    function getTargetQuestionMaxScoreFromForm() {
+      const val = Number(document.getElementById("input-soal-max-poin")?.value);
+      return Number.isFinite(val) && val > 0 ? roundScore(val) : getDefaultPerQuestionWeight();
+    }
+
+    function updateRubricTotalBadge() {
+      const target = getTargetQuestionMaxScoreFromForm();
+      const total = roundScore(state.draftRubrik.reduce((s, r) => s + (Number(r.skorMaks) || 0), 0));
+      const lbl = document.getElementById("rubric-header-label");
+      const badge = document.getElementById("rubric-total-badge");
+
+      if (lbl) lbl.textContent = `RUBRIK PENILAIAN (TOTAL SKOR HARUS ${formatScore(target)})`;
+      if (badge) {
+        badge.textContent = `Total Skor: ${formatScore(total)} / ${formatScore(target)}`;
+        const isMatch = Math.abs(total - target) < 0.05 && total > 0;
+        badge.className = isMatch
+          ? "px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold font-mono"
+          : "px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-bold font-mono";
+      }
+    }
+
+    function renderRubricEditor() {
+      const container = document.getElementById("rubric-editor-container");
+      if (!container) return;
+
+      if (state.draftRubrik.length === 0) {
+        container.innerHTML = `
+          <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 p-6 text-center text-xs text-slate-500">
+            Rubrik penilaian masih kosong. Setelah mengisi atau mengunggah soal, klik <strong>Buat Jawaban &amp; Rubrik Otomatis</strong> di atas atau susun manual di bawah.
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = state.draftRubrik.map((r, idx) => `
+        <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 space-y-2.5">
+          <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+            <span class="text-xs font-extrabold text-[#1A47E8] shrink-0">Kriteria ${idx + 1}</span>
+            <input type="text" value="${escapeHtml(r.nama)}" placeholder="Nama kriteria penilaian..."
+              oninput="updateCriterionField(${idx}, 'nama', this.value)"
+              class="flex-1 px-3 py-2 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-800" />
+            <div class="flex items-center gap-1.5 shrink-0">
+              <span class="text-[11px] font-semibold text-slate-500">Poin:</span>
+              <input type="number" min="0.5" max="100" step="0.5" value="${r.skorMaks}"
+                oninput="updateCriterionField(${idx}, 'skorMaks', this.value)"
+                class="w-20 px-2.5 py-2 rounded-lg border border-slate-200 bg-white text-xs font-extrabold text-center text-[#1A47E8]" />
+              <button type="button" onclick="removeCriterion(${idx})" title="Hapus kriteria"
+                class="p-2 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+          <textarea rows="2" placeholder="Deskripsi indikator pencapaian kriteria ini..."
+            oninput="updateCriterionField(${idx}, 'deskripsi', this.value)"
+            class="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-xs text-slate-700">${escapeHtml(r.deskripsi)}</textarea>
+        </div>
+      `).join("");
+
+      lucide.createIcons();
+    }
+
+    function addManualCriterion() {
+      const target = getTargetQuestionMaxScoreFromForm();
+      const current = roundScore(state.draftRubrik.reduce((s, r) => s + (Number(r.skorMaks) || 0), 0));
+      const suggest = Math.max(0.5, roundScore(target - current));
+      state.draftRubrik.push({ nama: "", deskripsi: "", skorMaks: suggest });
+      renderRubricEditor();
+      updateRubricTotalBadge();
+    }
+
+    function applyTemplate404020() {
+      const target = getTargetQuestionMaxScoreFromForm();
+      const s1 = Math.max(0.5, Math.round(target * 0.4 * 2) / 2);
+      const s2 = Math.max(0.5, Math.round(target * 0.4 * 2) / 2);
+      const s3 = Math.max(0.5, roundScore(target - s1 - s2));
+      state.draftRubrik = [
+        { nama: "Pemahaman Masalah & Pemodelan", deskripsi: "Menuliskan diketahui, ditanya, serta rumus atau model matematika dengan tepat.", skorMaks: s1 },
+        { nama: "Proses Perhitungan & Langkah Penyelesaian", deskripsi: "Melakukan langkah perhitungan aljabar/geometri secara runtut dan benar.", skorMaks: s2 },
+        { nama: "Kesimpulan & Satuan Akhir", deskripsi: "Menuliskan jawaban akhir beserta satuan yang diminta soal dengan lengkap.", skorMaks: s3 }
+      ];
+      renderRubricEditor();
+      updateRubricTotalBadge();
+      showToast(`Template rubrik 40/40/20 diterapkan (Total ${formatScore(target)} poin).`, "success");
+    }
+
+    function updateCriterionField(idx, field, val) {
+      if (!state.draftRubrik[idx]) return;
+      if (field === "skorMaks") {
+        state.draftRubrik[idx].skorMaks = Number(val) || 0;
+        updateRubricTotalBadge();
+      } else {
+        state.draftRubrik[idx][field] = val;
+      }
+    }
+
+    function removeCriterion(idx) {
+      state.draftRubrik.splice(idx, 1);
+      renderRubricEditor();
+      updateRubricTotalBadge();
+    }
+
+    async function handleQuestionImageUpload(event) {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (!file) return;
+
+      showToast("Membaca teks soal dari gambar dengan AI...", "info");
+      try {
+        const compressed = await compressImageFile(file);
+        const prompt = [
+          `Transkripsikan soal uraian Matematika dari gambar ini secara akurat dalam bahasa Indonesia.`,
+          `Kembalikan JSON valid: { "noSoal": "nomor soal jika terlihat atau kosong", "topik": "topik singkat matematika", "teksSoal": "teks lengkap soal uraian" }`
+        ].join("\n");
+
+        const raw = await callGeminiAPI([
+          { text: prompt },
+          { inlineData: { mimeType: compressed.mimeType, data: compressed.base64 } }
+        ], "application/json");
+        const parsed = parseJsonFromAI(raw);
+
+        if (parsed.noSoal && !state.editingQuestionId) {
+          document.getElementById("input-no-soal").value = normalizeNoSoal(parsed.noSoal);
+        }
+        if (parsed.topik) {
+          document.getElementById("input-topik-soal").value = parsed.topik;
+        }
+        if (parsed.teksSoal) {
+          document.getElementById("input-teks-soal").value = parsed.teksSoal;
+        }
+        updateAiGeneratorButtonState();
+        showToast("Teks soal berhasil dibaca dari gambar!", "success");
+
+        if (document.getElementById("chk-auto-generate-after-ocr")?.checked) {
+          await generateKeyAndRubricWithAI();
+        }
+      } catch (err) {
+        showToast("Gagal membaca gambar soal: " + err.message, "error");
+      }
+    }
+
+    async function generateKeyAndRubricWithAI() {
+      const teksSoal = (document.getElementById("input-teks-soal")?.value || "").trim();
+      if (!teksSoal) {
+        showToast("Isi teks soal uraian terlebih dahulu.", "warning");
+        return;
+      }
+
+      const targetMax = getTargetQuestionMaxScoreFromForm();
+      const btn = document.getElementById("btn-ai-generate-rubric");
+      const lbl = document.getElementById("btn-ai-generate-label");
+      if (btn) btn.disabled = true;
+      if (lbl) lbl.textContent = "Menyusun Kunci & Rubrik...";
+
+      try {
+        const prompt = [
+          `Anda adalah guru Matematika SMP Kelas 9.`,
+          `Buatkan topik singkat, kunci jawaban langkah demi langkah yang benar dan lengkap, serta rubrik penilaian (3 sampai 4 kriteria) dengan TOTAL SKOR TEPAT ${targetMax} poin (skor tiap kriteria boleh kelipatan 0.5).`,
+          ``,
+          `SOAL URAIAN:`,
+          teksSoal,
+          ``,
+          `Kembalikan HANYA JSON valid:`,
+          `{`,
+          `  "topik": "judul topik singkat",`,
+          `  "kunciJawaban": "langkah penyelesaian lengkap",`,
+          `  "rubrik": [`,
+          `    { "nama": "nama kriteria", "deskripsi": "indikator penilaian", "skorMaks": 1.5 }`,
+          `  ]`,
+          `}`
+        ].join("\n");
+
+        const raw = await callGeminiAPI([{ text: prompt }], "application/json");
+        const parsed = parseJsonFromAI(raw);
+
+        const elTopik = document.getElementById("input-topik-soal");
+        if (elTopik && !elTopik.value.trim() && parsed.topik) {
+          elTopik.value = parsed.topik;
+        }
+        if (parsed.kunciJawaban) {
+          document.getElementById("input-kunci-jawaban").value = parsed.kunciJawaban;
+        }
+        if (Array.isArray(parsed.rubrik) && parsed.rubrik.length > 0) {
+          state.draftRubrik = rescaleRubricToTarget(
+            parsed.rubrik.map((r) => ({
+              nama: String(r.nama || "Kriteria"),
+              deskripsi: String(r.deskripsi || ""),
+              skorMaks: Number(r.skorMaks) || 1
+            })),
+            targetMax
+          );
+        }
+
+        renderRubricEditor();
+        updateRubricTotalBadge();
+        showToast("Kunci jawaban & rubrik otomatis selesai dibuat! Silakan periksa & verifikasi.", "success");
+      } catch (err) {
+        showToast("Gagal membuat kunci & rubrik AI: " + err.message, "error");
+      } finally {
+        if (lbl) lbl.textContent = "Buat Jawaban & Rubrik Otomatis";
+        updateAiGeneratorButtonState();
+      }
+    }
+
+    function saveQuestionForm() {
+      const noSoal = normalizeNoSoal(document.getElementById("input-no-soal")?.value || "");
+      const topik = (document.getElementById("input-topik-soal")?.value || "").trim();
+      const teksSoal = (document.getElementById("input-teks-soal")?.value || "").trim();
+      const kunciJawaban = (document.getElementById("input-kunci-jawaban")?.value || "").trim();
+      const terverifikasi = Boolean(document.getElementById("chk-verify-key")?.checked);
+      const targetMax = getTargetQuestionMaxScoreFromForm();
+
+      if (!noSoal || !topik || !teksSoal || !kunciJawaban) {
+        showToast("Lengkapi No. Soal, Topik, Teks Soal, dan Kunci Jawaban terlebih dahulu.", "warning");
+        return;
+      }
+      if (!terverifikasi) {
+        showToast("Centang kotak verifikasi kebenaran Kunci Jawaban Acuan terlebih dahulu.", "warning");
+        return;
+      }
+      if (state.draftRubrik.length === 0) {
+        showToast("Tambahkan minimal 1 kriteria rubrik penilaian.", "warning");
+        return;
+      }
+
+      const totalRubrik = roundScore(state.draftRubrik.reduce((s, r) => s + (Number(r.skorMaks) || 0), 0));
+      if (Math.abs(totalRubrik - targetMax) > 0.05) {
+        showToast(`Total skor rubrik (${formatScore(totalRubrik)}) harus sama dengan Maks Skor Soal (${formatScore(targetMax)}).`, "warning");
+        return;
+      }
+
+      const cleanRubrik = state.draftRubrik.map((r, i) => ({
+        nama: (r.nama || `Kriteria ${i + 1}`).trim(),
+        deskripsi: (r.deskripsi || "-").trim(),
+        skorMaks: roundScore(r.skorMaks)
+      }));
+
+      if (state.editingQuestionId) {
+        const idx = state.questions.findIndex((q) => q.id === state.editingQuestionId);
+        if (idx !== -1) {
+          state.questions[idx] = {
+            ...state.questions[idx],
+            noSoal,
+            topik,
+            teksSoal,
+            kunciJawaban,
+            terverifikasi,
+            rubrik: cleanRubrik
+          };
+        }
+        showToast(`Soal No. ${noSoal} berhasil diperbarui!`, "success");
+      } else {
+        state.questions.push({
+          id: `q-${Date.now()}`,
+          noSoal,
+          topik,
+          teksSoal,
+          kunciJawaban,
+          aktif: true,
+          terverifikasi,
+          rubrik: cleanRubrik
+        });
+        showToast(`Soal No. ${noSoal} berhasil disimpan & diaktifkan!`, "success");
+      }
+
+      persistState();
+      updateGlobalCounters();
+      resetQuestionForm();
+      renderSoalTab();
+
+      if (state.cloudConfig.gasUrl && state.cloudConfig.autoSync) {
+        syncAppConfigToCloud({ silent: true });
+      }
+    }
+
+    function editQuestion(qId) {
+      const q = state.questions.find((item) => item.id === qId);
+      if (!q) return;
+
+      state.editingQuestionId = q.id;
+      state.draftRubrik = (q.rubrik || []).map((r) => ({ ...r }));
+
+      document.getElementById("form-soal-title").textContent = `Edit Soal No. ${q.noSoal}`;
+      document.getElementById("input-no-soal").value = q.noSoal;
+      document.getElementById("input-topik-soal").value = q.topik;
+      document.getElementById("input-soal-max-poin").value = getQuestionMaxScore(q);
+      document.getElementById("input-teks-soal").value = q.teksSoal;
+      document.getElementById("input-kunci-jawaban").value = q.kunciJawaban;
+      document.getElementById("chk-verify-key").checked = Boolean(q.terverifikasi);
+      document.getElementById("btn-save-soal-label").textContent = `Simpan Perubahan Soal No. ${q.noSoal}`;
+
+      renderRubricEditor();
+      updateRubricTotalBadge();
+      updateAiGeneratorButtonState();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function toggleQuestionActive(qId) {
+      const q = state.questions.find((item) => item.id === qId);
+      if (!q) return;
+      q.aktif = !q.aktif;
+      persistState();
+      updateGlobalCounters();
+      renderSoalTab();
+      if (state.cloudConfig.gasUrl && state.cloudConfig.autoSync) {
+        syncAppConfigToCloud({ silent: true });
+      }
+      showToast(`Soal No. ${q.noSoal} sekarang ${q.aktif ? "Aktif" : "Nonaktif"}.`, "info");
+    }
+
+    function deleteQuestion(qId) {
+      const q = state.questions.find((item) => item.id === qId);
+      if (!q) return;
+      openModal(`
+        <div class="p-6 space-y-4">
+          <h3 class="text-base font-bold text-slate-900">Hapus Soal No. ${escapeHtml(q.noSoal)}?</h3>
+          <p class="text-xs sm:text-sm text-slate-600">Soal "${escapeHtml(q.topik)}" beserta kunci jawaban dan rubriknya akan dihapus.</p>
+          <div class="flex justify-end gap-2 pt-2">
+            <button type="button" onclick="closeModal()" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold">Batal</button>
+            <button type="button" onclick="executeDeleteQuestion('${q.id}')" class="px-4 py-2 rounded-xl bg-rose-600 text-white text-xs font-bold">Ya, Hapus</button>
+          </div>
+        </div>
+      `);
+    }
+
+    function executeDeleteQuestion(qId) {
+      state.questions = state.questions.filter((item) => item.id !== qId);
+      if (state.editingQuestionId === qId) resetQuestionForm();
+      persistState();
+      updateGlobalCounters();
+      closeModal();
+      renderSoalTab();
+      if (state.cloudConfig.gasUrl && state.cloudConfig.autoSync) {
+        syncAppConfigToCloud({ silent: true });
+      }
+      showToast("Soal berhasil dihapus.", "info");
+    }
+
+    function renderSavedQuestionsList() {
+      const container = document.getElementById("saved-questions-list");
+      if (!container) return;
+
+      if (state.questions.length === 0) {
+        container.innerHTML = `<div class="p-6 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl">Belum ada soal yang tersimpan.</div>`;
+        return;
+      }
+
+      const sorted = [...state.questions].sort((a, b) =>
+        String(a.noSoal || "").localeCompare(String(b.noSoal || ""), "id", { numeric: true })
+      );
+
+      container.innerHTML = sorted.map((q) => {
+        const maxQ = getQuestionMaxScore(q);
+        return `
+          <div class="rounded-2xl border ${q.aktif ? 'border-slate-200 bg-white' : 'border-slate-200/70 bg-slate-50/70 opacity-75'} p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="min-w-0 space-y-1">
+              <div class="flex flex-wrap items-center gap-2 text-xs">
+                <span class="font-extrabold text-[#1A47E8]">No. ${escapeHtml(q.noSoal)}</span>
+                <span class="text-slate-300">·</span>
+                <span class="font-bold text-slate-800">${escapeHtml(q.topik)}</span>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold ${q.aktif ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}">${q.aktif ? "Aktif" : "Nonaktif"}</span>
+                <span class="px-2 py-0.5 rounded-full bg-blue-50 text-[#1A47E8] text-[10px] font-extrabold">${formatScore(maxQ)} Poin</span>
+              </div>
+              <p class="text-xs text-slate-500 line-clamp-2">${escapeHtml(q.teksSoal)}</p>
+            </div>
+
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button type="button" onclick="toggleQuestionActive('${q.id}')"
+                class="px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-700 transition-colors">
+                ${q.aktif ? "Nonaktifkan" : "Aktifkan"}
+              </button>
+              <button type="button" onclick="editQuestion('${q.id}')"
+                class="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-blue-50 text-xs font-bold text-slate-700 transition-colors">
+                <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                <span>Edit</span>
+              </button>
+              <button type="button" onclick="deleteQuestion('${q.id}')" title="Hapus soal"
+                class="p-2 rounded-xl border border-slate-200 bg-white hover:bg-rose-50 text-rose-500 transition-colors">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      lucide.createIcons();
+    }
+
+    // =========================================================================
+    // 7. TAB 3: REKAP NILAI, KIRIM WHATSAPP/EMAIL & EKSPOR EXCEL RAPI
+    // =========================================================================
+    function getSortedRecapQuestionNumbers() {
+      const numSet = new Set();
+      state.recaps.forEach((rec) => {
+        (rec.rincian || []).forEach((r) => {
+          const clean = normalizeNoSoal(r.noSoal);
+          if (clean) numSet.add(clean);
+        });
+      });
+      return Array.from(numSet).sort((a, b) => a.localeCompare(b, "id", { numeric: true }));
+    }
+
+    function renderRekapTab() {
+      const thead = document.getElementById("rekap-table-head");
+      const tbody = document.getElementById("rekap-table-body");
+      const mobileContainer = document.getElementById("rekap-mobile-cards");
+      if (!thead || !tbody) return;
+
+      const qNumbers = getSortedRecapQuestionNumbers();
+      const hasNumbers = qNumbers.length > 0;
+
+      if (hasNumbers) {
+        thead.innerHTML = `
+          <tr>
+            <th rowspan="2" class="px-4 py-3 border-r border-slate-200 text-center w-12">No</th>
+            <th rowspan="2" class="px-4 py-3 border-r border-slate-200">Nama Siswa</th>
+            <th rowspan="2" class="px-4 py-3 border-r border-slate-200 text-center">Kelas</th>
+            <th colspan="${qNumbers.length}" class="px-4 py-2 border-r border-b border-slate-200 text-center bg-blue-50/70 text-[#1A47E8]">Skor Per Nomor</th>
+            <th rowspan="2" class="px-4 py-3 border-r border-slate-200 text-center bg-emerald-50/70 text-emerald-800">Total Skor<br/><span class="text-[10px] font-semibold">(Maks ${formatScore(state.bobotUraianMaks)})</span></th>
+            <th rowspan="2" class="px-4 py-3 text-right">Kirim &amp; Aksi</th>
+          </tr>
+          <tr>
+            ${qNumbers.map((no) => `<th class="px-3 py-2 border-r border-slate-200 text-center bg-blue-50/40 text-slate-700 font-bold">No. ${escapeHtml(no)}</th>`).join("")}
+          </tr>
+        `;
+      } else {
+        thead.innerHTML = `
+          <tr>
+            <th class="px-4 py-3">No</th>
+            <th class="px-4 py-3">Nama Siswa</th>
+            <th class="px-4 py-3">Kelas</th>
+            <th class="px-4 py-3">Skor Per Nomor</th>
+            <th class="px-4 py-3">Total Skor (Maks ${formatScore(state.bobotUraianMaks)})</th>
+            <th class="px-4 py-3 text-right">Kirim &amp; Aksi</th>
+          </tr>
+        `;
+      }
+
+      if (state.recaps.length === 0) {
+        const colSpan = hasNumbers ? 5 + qNumbers.length : 6;
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="${colSpan}" class="px-6 py-12 text-center text-sm text-slate-400">
+              Belum ada data nilai paket siswa yang disimpan.
+            </td>
+          </tr>
+        `;
+        if (mobileContainer) {
+          mobileContainer.innerHTML = `
+            <div class="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-xs text-slate-400">
+              Belum ada data nilai paket siswa yang disimpan.
+            </div>
+          `;
+        }
+        lucide.createIcons();
+        return;
+      }
+
+      // Render Tampilan Kartu Ramah Android
+      if (mobileContainer) {
+        mobileContainer.innerHTML = state.recaps.map((rec, idx) => {
+          const scoreMap = {};
+          (rec.rincian || []).forEach((r) => {
+            scoreMap[normalizeNoSoal(r.noSoal)] = r.skor;
+          });
+          const linkCount = Object.keys(rec.driveLinks || {}).length;
+
+          return `
+            <div class="rounded-2xl border border-slate-200 bg-slate-50/40 p-4 space-y-3">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="w-5 h-5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-extrabold flex items-center justify-center shrink-0">${idx + 1}</span>
+                    <h3 class="text-sm font-extrabold text-slate-900 truncate">${escapeHtml(rec.nama)}</h3>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-slate-500">
+                    <span class="px-2 py-0.5 rounded-md bg-white border border-slate-200 font-bold text-slate-700">${escapeHtml(rec.kelas || "-")}</span>
+                    <span>${escapeHtml(rec.timestamp)}</span>
+                    ${rec.cloudSynced ? `<span class="inline-flex items-center gap-0.5 text-emerald-600 font-bold"><i data-lucide="cloud-check" class="w-3 h-3"></i> Sheets${linkCount > 0 ? ` (${linkCount})` : ""}</span>` : ""}
+                  </div>
+                </div>
+                <div class="text-right shrink-0">
+                  <span class="block text-[10px] font-bold uppercase text-slate-400">Nilai</span>
+                  <span class="inline-block px-3 py-1 rounded-xl bg-emerald-100 text-emerald-800 text-base font-extrabold">${formatScore(rec.totalSkor)}</span>
+                </div>
+              </div>
+
+              ${qNumbers.length > 0 ? `
+                <div class="grid grid-cols-5 gap-1.5">
+                  ${qNumbers.map((no) => {
+                    const val = scoreMap[no];
+                    return `
+                      <div class="rounded-xl bg-white border border-slate-200/80 py-1.5 px-1 text-center">
+                        <div class="text-[10px] font-bold text-slate-400">No.${escapeHtml(no)}</div>
+                        <div class="text-xs font-extrabold ${val !== undefined ? 'text-slate-800' : 'text-slate-300'}">${val !== undefined ? formatScore(val) : "-"}</div>
+                      </div>
+                    `;
+                  }).join("")}
+                </div>
+              ` : ""}
+
+              <div class="flex items-center gap-2 pt-1">
+                <button type="button" onclick="openShareModal('${rec.id}')"
+                  class="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-[#1A47E8] active:bg-[#153AC4] text-white text-xs font-bold shadow-xs transition-colors">
+                  <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                  <span>Kirim Hasil (WA / Email)</span>
+                </button>
+                <button type="button" onclick="deleteRecapItem('${rec.id}')" aria-label="Hapus siswa ini"
+                  class="p-2.5 rounded-xl border border-slate-200 bg-white active:bg-rose-50 text-rose-500 transition-colors">
+                  <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+              </div>
+            </div>
+          `;
+        }).join("");
+      }
+
+      tbody.innerHTML = state.recaps.map((rec, idx) => {
+        const scoreMap = {};
+        (rec.rincian || []).forEach((r) => {
+          scoreMap[normalizeNoSoal(r.noSoal)] = r.skor;
+        });
+
+        const linkCount = Object.keys(rec.driveLinks || {}).length;
+
+        return `
+          <tr class="hover:bg-slate-50/80 transition-colors">
+            <td class="px-4 py-3.5 text-center font-semibold text-slate-500 border-r border-slate-100">${idx + 1}</td>
+            <td class="px-4 py-3.5 border-r border-slate-100">
+              <div class="font-bold text-slate-900">${escapeHtml(rec.nama)}</div>
+              <div class="flex flex-wrap items-center gap-2 mt-0.5 text-[11px] text-slate-400">
+                <span>${escapeHtml(rec.timestamp)}</span>
+                ${rec.cloudSynced ? `<span class="inline-flex items-center gap-0.5 text-emerald-600 font-semibold"><i data-lucide="cloud-check" class="w-3 h-3"></i> Sheets${linkCount > 0 ? ` (${linkCount} foto)` : ""}</span>` : ""}
+              </div>
+            </td>
+            <td class="px-4 py-3.5 text-center border-r border-slate-100">
+              <span class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold">${escapeHtml(rec.kelas || "-")}</span>
+            </td>
+            ${qNumbers.map((no) => {
+              const val = scoreMap[no];
+              return `<td class="px-3 py-3.5 text-center border-r border-slate-100 font-bold ${val !== undefined ? 'text-slate-800' : 'text-slate-300'}">${val !== undefined ? formatScore(val) : "-"}</td>`;
+            }).join("")}
+            <td class="px-4 py-3.5 text-center border-r border-slate-100">
+              <span class="inline-block px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-sm font-extrabold">${formatScore(rec.totalSkor)}</span>
+            </td>
+            <td class="px-4 py-3.5 text-right">
+              <div class="inline-flex items-center gap-1.5">
+                <button type="button" onclick="openShareModal('${rec.id}')"
+                  class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#1A47E8] hover:bg-[#153AC4] text-white text-xs font-bold shadow-xs transition-colors">
+                  <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                  <span>Kirim</span>
+                </button>
+                <button type="button" onclick="deleteRecapItem('${rec.id}')" title="Hapus siswa ini"
+                  class="p-2 rounded-xl border border-slate-200 bg-white hover:bg-rose-50 text-rose-500 transition-colors">
+                  <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join("");
+
+      lucide.createIcons();
+    }
+
+    function buildShareMessage(rec) {
+      const lines = [
+        `*HASIL KOREKSI PSAS MATEMATIKA KELAS 9*`,
+        `Nama Siswa: ${rec.nama}`,
+        `Kelas: ${rec.kelas || "-"}`,
+        `Waktu: ${rec.timestamp}`,
+        ``,
+        `*Rincian Skor Uraian:*`,
+        ...(rec.rincian || []).map((r) => `- No. ${r.noSoal} (${r.topik}): *${formatScore(r.skor)}*${r.catatanUmum ? ` — ${r.catatanUmum}` : ""}`),
+        ``,
+        `*Total Skor Uraian: ${formatScore(rec.totalSkor)} / ${formatScore(state.bobotUraianMaks)}*`
+      ];
+      return lines.join("\n");
+    }
+
+    function openShareModal(recId) {
+      const rec = state.recaps.find((r) => r.id === recId);
+      if (!rec) return;
+      const msg = buildShareMessage(rec);
+      const waUrl = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+      const mailUrl = `mailto:?subject=${encodeURIComponent(`Hasil Koreksi PSAS MTK 9 - ${rec.nama}`)}&body=${encodeURIComponent(msg)}`;
+      const driveEntries = Object.entries(rec.driveLinks || {});
+
+      openModal(`
+        <div class="p-6 space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-base font-bold text-slate-900">Kirim Hasil Koreksi</h3>
+              <p class="text-xs text-slate-500">${escapeHtml(rec.nama)} (${escapeHtml(rec.kelas || "-")}) · Total Skor: ${formatScore(rec.totalSkor)}</p>
+            </div>
+            <button type="button" onclick="closeModal()" class="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <textarea id="share-message-box" rows="9"
+            class="w-full p-3.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono text-slate-700">${escapeHtml(msg)}</textarea>
+
+          ${driveEntries.length > 0 ? `
+            <div class="rounded-xl bg-blue-50/70 border border-blue-200 p-3 space-y-1">
+              <p class="text-[11px] font-bold text-blue-900">Link Foto Jawaban di Google Drive:</p>
+              <div class="flex flex-wrap gap-2">
+                ${driveEntries.map(([no, url]) => `
+                  <a href="${escapeHtml(url)}" target="_blank" rel="noopener"
+                    class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-blue-200 text-[11px] font-bold text-[#1A47E8] hover:underline">
+                    <i data-lucide="external-link" class="w-3 h-3"></i>
+                    <span>Foto No. ${escapeHtml(no)}</span>
+                  </a>
+                `).join("")}
+              </div>
+            </div>
+          ` : ""}
+
+          <div class="flex flex-wrap items-center gap-2 pt-1">
+            <a href="${waUrl}" target="_blank" rel="noopener"
+              class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#25D366] hover:bg-[#1EB958] text-white text-xs font-bold">
+              <i data-lucide="message-circle" class="w-4 h-4"></i>
+              <span>Kirim WhatsApp</span>
+            </a>
+            <a href="${mailUrl}"
+              class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#1A47E8] hover:bg-[#153AC4] text-white text-xs font-bold">
+              <i data-lucide="mail" class="w-4 h-4"></i>
+              <span>Kirim Email</span>
+            </a>
+            <button type="button" onclick="copyTextToClipboard(document.getElementById('share-message-box').value, 'Laporan nilai disalin!')"
+              class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold">
+              <i data-lucide="copy" class="w-4 h-4"></i>
+              <span>Salin Teks</span>
+            </button>
+          </div>
+        </div>
+      `);
+    }
+
+    function deleteRecapItem(recId) {
+      state.recaps = state.recaps.filter((r) => r.id !== recId);
+      persistState();
+      updateGlobalCounters();
+      renderRekapTab();
+      showToast("Data rekap siswa dihapus dari daftar lokal.", "info");
+    }
+
+    function confirmDeleteAllRecap() {
+      if (state.recaps.length === 0) return;
+      openModal(`
+        <div class="p-6 space-y-4">
+          <h3 class="text-base font-bold text-slate-900">Hapus Semua Data Rekap?</h3>
+          <p class="text-xs sm:text-sm text-slate-600">Seluruh (${state.recaps.length}) data rekap nilai di perangkat ini akan dihapus.</p>
+          <div class="flex justify-end gap-2 pt-2">
+            <button type="button" onclick="closeModal()" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold">Batal</button>
+            <button type="button" onclick="executeDeleteAllRecap()" class="px-4 py-2 rounded-xl bg-rose-600 text-white text-xs font-bold">Ya, Hapus Semua</button>
+          </div>
+        </div>
+      `);
+    }
+
+    function executeDeleteAllRecap() {
+      state.recaps = [];
+      persistState();
+      updateGlobalCounters();
+      closeModal();
+      renderRekapTab();
+      showToast("Seluruh data rekap lokal telah dihapus.", "info");
+    }
+
+    async function exportRecapToExcel() {
+      if (state.recaps.length === 0) {
+        showToast("Belum ada data rekap untuk diunduh.", "warning");
+        return;
+      }
+
+      try {
+        const qNumbers = getSortedRecapQuestionNumbers();
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet("Rekap Nilai Uraian", {
+          views: [{ state: "frozen", ySplit: 5 }]
+        });
+
+        const totalCols = 4 + qNumbers.length + 2; // No, Nama, Kelas, Waktu, [No...], Total Skor, Catatan
+
+        // Baris 1: Judul Utama
+        sheet.mergeCells(1, 1, 1, totalCols);
+        const titleCell = sheet.getCell(1, 1);
+        titleCell.value = "REKAP NILAI KOREKSI PSAS MATEMATIKA KELAS 9 (URAIAN)";
+        titleCell.font = { name: "Calibri", size: 14, bold: true, color: { argb: "FFFFFFFF" } };
+        titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1A47E8" } };
+        titleCell.alignment = { horizontal: "center", vertical: "middle" };
+        sheet.getRow(1).height = 30;
+
+        // Baris 2: Subjudul
+        sheet.mergeCells(2, 1, 2, totalCols);
+        const subCell = sheet.getCell(2, 1);
+        subCell.value = `Diekspor: ${new Date().toLocaleString("id-ID")} · Jumlah Siswa: ${state.recaps.length} · Bobot Maks Uraian: ${formatScore(state.bobotUraianMaks)} Poin`;
+        subCell.font = { name: "Calibri", size: 10, italic: true, color: { argb: "FF1E3A8A" } };
+        subCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEFF6FF" } };
+        subCell.alignment = { horizontal: "center", vertical: "middle" };
+        sheet.getRow(2).height = 20;
+
+        // Baris 3: Kosong
+        sheet.getRow(3).height = 8;
+
+        const thinBorder = {
+          top: { style: "thin", color: { argb: "FFCBD5E1" } },
+          left: { style: "thin", color: { argb: "FFCBD5E1" } },
+          bottom: { style: "thin", color: { argb: "FFCBD5E1" } },
+          right: { style: "thin", color: { argb: "FFCBD5E1" } }
+        };
+
+        // Baris 4 & 5: Header Bertingkat
+        const row4 = sheet.getRow(4);
+        const row5 = sheet.getRow(5);
+        row4.height = 24;
+        row5.height = 22;
+
+        const idHeaders = ["No", "Nama Siswa", "Kelas", "Waktu Koreksi"];
+        idHeaders.forEach((h, i) => {
+          const col = i + 1;
+          sheet.mergeCells(4, col, 5, col);
+          const c = sheet.getCell(4, col);
+          c.value = h;
+          c.font = { bold: true, color: { argb: "FFFFFFFF" } };
+          c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E40AF" } };
+          c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+          c.border = thinBorder;
+          sheet.getCell(5, col).border = thinBorder;
+        });
+
+        const scoreStartCol = 5;
+        if (qNumbers.length > 0) {
+          sheet.mergeCells(4, scoreStartCol, 4, scoreStartCol + qNumbers.length - 1);
+          const grpCell = sheet.getCell(4, scoreStartCol);
+          grpCell.value = "Skor Per Nomor";
+          grpCell.font = { bold: true, color: { argb: "FF1E3A8A" } };
+          grpCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDBEAFE" } };
+          grpCell.alignment = { horizontal: "center", vertical: "middle" };
+
+          qNumbers.forEach((no, idx) => {
+            const col = scoreStartCol + idx;
+            sheet.getCell(4, col).border = thinBorder;
+            const sub = sheet.getCell(5, col);
+            sub.value = `No. ${no}`;
+            sub.font = { bold: true, color: { argb: "FF1E3A8A" } };
+            sub.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEFF6FF" } };
+            sub.alignment = { horizontal: "center", vertical: "middle" };
+            sub.border = thinBorder;
+          });
+        }
+
+        const totalCol = scoreStartCol + qNumbers.length;
+        sheet.mergeCells(4, totalCol, 5, totalCol);
+        const cTotal = sheet.getCell(4, totalCol);
+        cTotal.value = `Nilai Uraian\n(Maks ${formatScore(state.bobotUraianMaks)})`;
+        cTotal.font = { bold: true, color: { argb: "FFFFFFFF" } };
+        cTotal.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF059669" } };
+        cTotal.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cTotal.border = thinBorder;
+        sheet.getCell(5, totalCol).border = thinBorder;
+
+        const noteCol = totalCol + 1;
+        sheet.mergeCells(4, noteCol, 5, noteCol);
+        const cNote = sheet.getCell(4, noteCol);
+        cNote.value = "Catatan Ringkas";
+        cNote.font = { bold: true, color: { argb: "FFFFFFFF" } };
+        cNote.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF334155" } };
+        cNote.alignment = { horizontal: "center", vertical: "middle" };
+        cNote.border = thinBorder;
+        sheet.getCell(5, noteCol).border = thinBorder;
+
+        // Data Siswa
+        state.recaps.forEach((rec, idx) => {
+          const scoreMap = {};
+          const notes = [];
+          (rec.rincian || []).forEach((r) => {
+            scoreMap[normalizeNoSoal(r.noSoal)] = r.skor;
+            if (r.catatanUmum) notes.push(`No.${r.noSoal}: ${r.catatanUmum}`);
+          });
+
+          const rowValues = [
+            idx + 1,
+            rec.nama,
+            rec.kelas || "-",
+            rec.timestamp,
+            ...qNumbers.map((no) => (scoreMap[no] !== undefined ? scoreMap[no] : "-")),
+            rec.totalSkor,
+            notes.join(" | ") || "-"
+          ];
+
+          const excelRow = sheet.addRow(rowValues);
+          const isZebra = idx % 2 === 1;
+          excelRow.eachCell((cell, colNumber) => {
+            cell.border = thinBorder;
+            if (isZebra) {
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
+            }
+            if (colNumber === 1 || colNumber === 3 || (colNumber >= scoreStartCol && colNumber <= totalCol)) {
+              cell.alignment = { horizontal: "center", vertical: "middle" };
+            } else if (colNumber === noteCol) {
+              cell.alignment = { horizontal: "left", vertical: "top", wrapText: true };
+            } else {
+              cell.alignment = { horizontal: "left", vertical: "middle" };
+            }
+            if (colNumber === totalCol) {
+              cell.font = { bold: true, color: { argb: "FF047857" } };
+            }
+          });
+        });
+
+        // Lebar Kolom
+        sheet.getColumn(1).width = 6;
+        sheet.getColumn(2).width = 28;
+        sheet.getColumn(3).width = 10;
+        sheet.getColumn(4).width = 20;
+        qNumbers.forEach((_, i) => { sheet.getColumn(scoreStartCol + i).width = 10; });
+        sheet.getColumn(totalCol).width = 15;
+        sheet.getColumn(noteCol).width = 50;
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `Rekap_Nilai_PSAS_MTK9_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast("File Excel rekap nilai berhasil diunduh!", "success");
+      } catch (err) {
+        showToast("Gagal mengekspor Excel: " + err.message, "error");
+      }
+    }
+
+    // =========================================================================
+    // 8. INTEGRASI GOOGLE SHEETS & GOOGLE DRIVE (2 ARAH)
+    // =========================================================================
+    function getGoogleAppsScriptTemplate() {
+      return [
+        "const NAMA_FOLDER_DRIVE = 'Koreksi_PSAS_MTK9_Jawaban';",
+        "const NAMA_SHEET_REKAP = 'Rekap Nilai';",
+        "const NAMA_SHEET_DETAIL = 'Detail Jawaban & Foto';",
+        "const NAMA_SHEET_SISWA = 'Daftar Siswa';",
+        "const NAMA_SHEET_SOAL = 'Soal & Rubrik';",
+        "const NAMA_SHEET_CONFIG = 'Database Aplikasi';",
+        "",
+        "function doGet(e) {",
+        "  try {",
+        "    if (e && e.parameter && e.parameter.action === 'load_all') {",
+        "      const ss = SpreadsheetApp.getActiveSpreadsheet();",
+        "      return jsonOut({ status: 'ok', data: ambilSemuaData(ss) });",
+        "    }",
+        "    return jsonOut({ status: 'ok', message: 'Koneksi Google Sheets & Drive aktif!' });",
+        "  } catch (err) {",
+        "    return jsonOut({ status: 'error', message: err.toString() });",
+        "  }",
+        "}",
+        "",
+        "function doPost(e) {",
+        "  try {",
+        "    const payload = JSON.parse((e && e.postData && e.postData.contents) || '{}');",
+        "    const ss = SpreadsheetApp.getActiveSpreadsheet();",
+        "    if (payload.action === 'save_config') {",
+        "      simpanConfigKeSheet(ss, payload);",
+        "      return jsonOut({ status: 'ok', message: 'Data siswa, kelas, soal, kunci & rubrik tersimpan ke Sheets!' });",
+        "    }",
+        "    if (payload.action === 'save_recap') {",
+        "      const res = simpanRekapDanFoto(ss, payload);",
+        "      return jsonOut({ status: 'ok', driveLinks: res.driveLinks, message: 'Rekap nilai & foto berhasil disimpan!' });",
+        "    }",
+        "    return jsonOut({ status: 'error', message: 'Action tidak dikenali.' });",
+        "  } catch (err) {",
+        "    return jsonOut({ status: 'error', message: err.toString() });",
+        "  }",
+        "}",
+        "",
+        "function jsonOut(obj) {",
+        "  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);",
+        "}",
+        "",
+        "function getOrCreateFolder(parent, name) {",
+        "  const it = parent.getFoldersByName(name);",
+        "  return it.hasNext() ? it.next() : parent.createFolder(name);",
+        "}",
+        "",
+        "function simpanConfigKeSheet(ss, payload) {",
+        "  let sheet = ss.getSheetByName(NAMA_SHEET_CONFIG);",
+        "  if (!sheet) {",
+        "    sheet = ss.insertSheet(NAMA_SHEET_CONFIG);",
+        "    sheet.appendRow(['Kunci', 'Data JSON', 'Terakhir Update']);",
+        "    sheet.getRange(1, 1, 1, 3).setBackground('#334155').setFontColor('#FFFFFF').setFontWeight('bold');",
+        "  }",
+        "  const now = new Date().toLocaleString('id-ID');",
+        "  const configObj = {",
+        "    bobotUraianMaks: payload.bobotUraianMaks || 30,",
+        "    targetJumlahSoal: payload.targetJumlahSoal || 5,",
+        "    questions: payload.questions || [],",
+        "    students: payload.students || [],",
+        "    studentsImported: !!payload.studentsImported",
+        "  };",
+        "  const row = ['APP_CONFIG', JSON.stringify(configObj), now];",
+        "  if (sheet.getLastRow() >= 2) {",
+        "    sheet.getRange(2, 1, 1, 3).setValues([row]);",
+        "  } else {",
+        "    sheet.appendRow(row);",
+        "  }",
+        "  simpanKeSheetSiswa(ss, configObj.students);",
+        "  simpanKeSheetSoal(ss, configObj.questions);",
+        "}",
+        "",
+        "function simpanKeSheetSiswa(ss, students) {",
+        "  let sheet = ss.getSheetByName(NAMA_SHEET_SISWA);",
+        "  if (!sheet) sheet = ss.insertSheet(NAMA_SHEET_SISWA);",
+        "  sheet.clear();",
+        "  sheet.appendRow(['No', 'Nama Siswa', 'Kelas']);",
+        "  sheet.getRange(1, 1, 1, 3).setBackground('#1A47E8').setFontColor('#FFFFFF').setFontWeight('bold');",
+        "  sheet.setFrozenRows(1);",
+        "  if (students && students.length > 0) {",
+        "    const rows = students.map(function(s, idx) {",
+        "      return [idx + 1, String(s.nama || '').trim(), String(s.kelas || '-').trim()];",
+        "    });",
+        "    sheet.getRange(2, 1, rows.length, 3).setValues(rows);",
+        "  }",
+        "  sheet.autoResizeColumns(1, 3);",
+        "}",
+        "",
+        "function simpanKeSheetSoal(ss, questions) {",
+        "  let sheet = ss.getSheetByName(NAMA_SHEET_SOAL);",
+        "  if (!sheet) sheet = ss.insertSheet(NAMA_SHEET_SOAL);",
+        "  sheet.clear();",
+        "  const headers = ['No. Soal', 'Topik', 'Status', 'Maks Skor', 'Teks Soal', 'Kunci Jawaban Acuan', 'Rubrik Penilaian'];",
+        "  sheet.appendRow(headers);",
+        "  sheet.getRange(1, 1, 1, 7).setBackground('#0F766E').setFontColor('#FFFFFF').setFontWeight('bold');",
+        "  sheet.setFrozenRows(1);",
+        "  if (questions && questions.length > 0) {",
+        "    const sorted = questions.slice().sort(function(a, b) {",
+        "      return String(a.noSoal || '').localeCompare(String(b.noSoal || ''), 'id', { numeric: true });",
+        "    });",
+        "    const rows = sorted.map(function(q) {",
+        "      const rubrikList = q.rubrik || [];",
+        "      const maksSkor = Math.round(rubrikList.reduce(function(sum, r) {",
+        "        return sum + (Number(r.skorMaks) || 0);",
+        "      }, 0) * 10) / 10;",
+        "      const rubrikText = rubrikList.map(function(r, idx) {",
+        "        return (idx + 1) + '. ' + (r.nama || 'Kriteria') + ' (' + r.skorMaks + ' poin): ' + (r.deskripsi || '-');",
+        "      }).join('\\n');",
+        "      return [",
+        "        String(q.noSoal || ''),",
+        "        String(q.topik || ''),",
+        "        q.aktif ? 'Aktif' : 'Nonaktif',",
+        "        maksSkor,",
+        "        String(q.teksSoal || ''),",
+        "        String(q.kunciJawaban || ''),",
+        "        rubrikText",
+        "      ];",
+        "    });",
+        "    const range = sheet.getRange(2, 1, rows.length, 7);",
+        "    range.setValues(rows);",
+        "    range.setWrap(true);",
+        "    range.setVerticalAlignment('top');",
+        "  }",
+        "  sheet.setColumnWidth(1, 75);",
+        "  sheet.setColumnWidth(2, 150);",
+        "  sheet.setColumnWidth(3, 85);",
+        "  sheet.setColumnWidth(4, 85);",
+        "  sheet.setColumnWidth(5, 320);",
+        "  sheet.setColumnWidth(6, 320);",
+        "  sheet.setColumnWidth(7, 360);",
+        "}",
+        "",
+        "function rapikanHeaderDanBarisDetail(sheet) {",
+        "  const headers = ['Waktu', 'Nama Siswa', 'Kelas', 'No. Soal', 'Topik', 'Skor', 'Catatan AI', 'Transkripsi Jawaban', 'Link Foto di Drive'];",
+        "  sheet.getRange(1, 1, 1, 9).setValues([headers]).setBackground('#0F766E').setFontColor('#FFFFFF').setFontWeight('bold');",
+        "  const lastRow = sheet.getLastRow();",
+        "  const lastCol = sheet.getLastColumn();",
+        "  if (lastRow >= 2 && lastCol >= 10) {",
+        "    const vals = sheet.getRange(2, 1, lastRow - 1, 10).getValues();",
+        "    let changed = false;",
+        "    const fixed = vals.map(function(r) {",
+        "      if (String(r[9] || '').indexOf('drive.google.com') !== -1 && String(r[8] || '').indexOf('drive.google.com') === -1) {",
+        "        changed = true;",
+        "        return [r[0], r[1], r[2], r[3], r[4], r[5], r[7], r[8], r[9]];",
+        "      }",
+        "      return r.slice(0, 9);",
+        "    });",
+        "    if (changed) {",
+        "      sheet.getRange(2, 1, fixed.length, 9).setValues(fixed);",
+        "      sheet.getRange(1, 10, lastRow, lastCol - 9).clearContent();",
+        "    }",
+        "  }",
+        "}",
+        "",
+        "function simpanRekapDanFoto(ss, payload) {",
+        "  const nama = String(payload.nama || '').trim();",
+        "  const kelas = String(payload.kelas || '-').trim();",
+        "  const timestamp = payload.timestamp || new Date().toLocaleString('id-ID');",
+        "  const nilai = payload.nilai !== undefined ? payload.nilai : (payload.totalSkor !== undefined ? payload.totalSkor : payload.rataRata);",
+        "  const rincian = payload.rincian || [];",
+        "  const images = payload.images || {};",
+        "  const driveLinks = Object.assign({}, payload.existingDriveLinks || {});",
+        "",
+        "  const rootFolder = getOrCreateFolder(DriveApp.getRootFolder(), NAMA_FOLDER_DRIVE);",
+        "  const classFolder = getOrCreateFolder(rootFolder, kelas || 'Tanpa_Kelas');",
+        "",
+        "  Object.keys(images).forEach(function(noKey) {",
+        "    const imgObj = images[noKey];",
+        "    if (imgObj && imgObj.base64) {",
+        "      const bytes = Utilities.base64Decode(imgObj.base64);",
+        "      const safeName = (nama + '_No' + noKey + '_' + Date.now() + '.jpg').replace(/[^a-zA-Z0-9_.-]/g, '_');",
+        "      const blob = Utilities.newBlob(bytes, imgObj.mimeType || 'image/jpeg', safeName);",
+        "      const file = classFolder.createFile(blob);",
+        "      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);",
+        "      driveLinks[String(noKey)] = file.getUrl();",
+        "    }",
+        "  });",
+        "",
+        "  let rekapSheet = ss.getSheetByName(NAMA_SHEET_REKAP);",
+        "  if (!rekapSheet) {",
+        "    rekapSheet = ss.insertSheet(NAMA_SHEET_REKAP);",
+        "    rekapSheet.appendRow(['Waktu Update', 'Nama Siswa', 'Kelas', 'Nilai', 'Rincian Skor', 'Link Foto Drive']);",
+        "    rekapSheet.getRange(1, 1, 1, 6).setBackground('#1A47E8').setFontColor('#FFFFFF').setFontWeight('bold');",
+        "    rekapSheet.setFrozenRows(1);",
+        "  } else {",
+        "    rekapSheet.getRange(1, 4).setValue('Nilai');",
+        "  }",
+        "",
+        "  const rincianStr = rincian.map(function(r) { return 'No.' + r.noSoal + ': ' + r.skor; }).join(' | ');",
+        "  const linkStr = Object.keys(driveLinks).sort(function(a, b) {",
+        "    return String(a).localeCompare(String(b), 'id', { numeric: true });",
+        "  }).map(function(k) { return 'No.' + k + ': ' + driveLinks[k]; }).join('\\n');",
+        "",
+        "  const rekapVals = rekapSheet.getDataRange().getValues();",
+        "  let foundRekapRow = -1;",
+        "  for (let i = 1; i < rekapVals.length; i++) {",
+        "    if (String(rekapVals[i][1] || '').trim().toLowerCase() === nama.toLowerCase() &&",
+        "        String(rekapVals[i][2] || '').trim().toLowerCase() === kelas.toLowerCase()) {",
+        "      foundRekapRow = i + 1;",
+        "      break;",
+        "    }",
+        "  }",
+        "  const rekapRowData = [timestamp, nama, kelas, nilai, rincianStr, linkStr];",
+        "  if (foundRekapRow > 0) {",
+        "    rekapSheet.getRange(foundRekapRow, 1, 1, 6).setValues([rekapRowData]);",
+        "  } else {",
+        "    rekapSheet.appendRow(rekapRowData);",
+        "  }",
+        "",
+        "  let detailSheet = ss.getSheetByName(NAMA_SHEET_DETAIL);",
+        "  if (!detailSheet) {",
+        "    detailSheet = ss.insertSheet(NAMA_SHEET_DETAIL);",
+        "    detailSheet.setFrozenRows(1);",
+        "  }",
+        "  rapikanHeaderDanBarisDetail(detailSheet);",
+        "",
+        "  const detailVals = detailSheet.getDataRange().getValues();",
+        "  rincian.forEach(function(r) {",
+        "    const noClean = String(r.noSoal || '').replace(/^No\\.?\\s*/i, '').trim();",
+        "    const link = driveLinks[noClean] || '';",
+        "    const rowData = [timestamp, nama, kelas, 'No. ' + noClean, r.topik || 'Uraian', r.skor, r.catatanUmum || '', r.transkripsi || '', link];",
+        "    let foundDetailRow = -1;",
+        "    for (let i = 1; i < detailVals.length; i++) {",
+        "      const rNama = String(detailVals[i][1] || '').trim().toLowerCase();",
+        "      const rKelas = String(detailVals[i][2] || '').trim().toLowerCase();",
+        "      const rNo = String(detailVals[i][3] || '').replace(/^No\\.?\\s*/i, '').trim();",
+        "      if (rNama === nama.toLowerCase() && rKelas === kelas.toLowerCase() && rNo === noClean) {",
+        "        foundDetailRow = i + 1;",
+        "        if (!link && detailVals[i][8]) rowData[8] = detailVals[i][8];",
+        "        break;",
+        "      }",
+        "    }",
+        "    if (foundDetailRow > 0) {",
+        "      detailSheet.getRange(foundDetailRow, 1, 1, 9).setValues([rowData]);",
+        "    } else {",
+        "      detailSheet.appendRow(rowData);",
+        "    }",
+        "  });",
+        "",
+        "  return { driveLinks: driveLinks };",
+        "}",
+        "",
+        "function ambilSemuaData(ss) {",
+        "  const result = { config: null, recaps: [] };",
+        "  const cfgSheet = ss.getSheetByName(NAMA_SHEET_CONFIG);",
+        "  if (cfgSheet && cfgSheet.getLastRow() >= 2) {",
+        "    try {",
+        "      const rawJson = String(cfgSheet.getRange(2, 2).getValue() || '');",
+        "      if (rawJson) result.config = JSON.parse(rawJson);",
+        "    } catch (e) {}",
+        "  }",
+        "",
+        "  // Selalu prioritaskan sheet 'Daftar Siswa' jika ada datanya agar editan langsung di Spreadsheet sinkron ke aplikasi",
+        "  const siswaSheet = ss.getSheetByName(NAMA_SHEET_SISWA);",
+        "  if (siswaSheet && siswaSheet.getLastRow() >= 2) {",
+        "    const sVals = siswaSheet.getDataRange().getValues();",
+        "    const headerRow = (sVals[0] || []).map(function(c) { return String(c || '').trim().toLowerCase(); });",
+        "    let namaCol = headerRow.findIndex(function(c) { return c.indexOf('nama') !== -1 || c.indexOf('siswa') !== -1; });",
+        "    let kelasCol = headerRow.findIndex(function(c) { return c.indexOf('kelas') !== -1 || c.indexOf('rombel') !== -1; });",
+        "    if (namaCol === -1) namaCol = (sVals[0] && sVals[0].length >= 3) ? 1 : 0;",
+        "    if (kelasCol === -1) kelasCol = (sVals[0] && sVals[0].length >= 3) ? 2 : 1;",
+        "    const loadedStudents = [];",
+        "    const seenMap = {};",
+        "    for (let i = 1; i < sVals.length; i++) {",
+        "      const nama = String(sVals[i][namaCol] || '').trim();",
+        "      const kelasRaw = kelasCol >= 0 ? String(sVals[i][kelasCol] || '').trim() : '';",
+        "      const kelas = kelasRaw === '-' ? '' : kelasRaw;",
+        "      if (!nama) continue;",
+        "      const key = nama.toLowerCase() + '|' + kelas.toLowerCase();",
+        "      if (!seenMap[key]) {",
+        "        seenMap[key] = true;",
+        "        loadedStudents.push({ nama: nama, kelas: kelas });",
+        "      }",
+        "    }",
+        "    if (loadedStudents.length > 0) {",
+        "      if (!result.config) result.config = {};",
+        "      result.config.students = loadedStudents;",
+        "      result.config.studentsImported = true;",
+        "    }",
+        "  }",
+        "",
+        "  const recapMap = {};",
+        "  const detailSheet = ss.getSheetByName(NAMA_SHEET_DETAIL);",
+        "  if (detailSheet && detailSheet.getLastRow() >= 2) {",
+        "    rapikanHeaderDanBarisDetail(detailSheet);",
+        "    const dVals = detailSheet.getDataRange().getValues();",
+        "    for (let i = 1; i < dVals.length; i++) {",
+        "      const nama = String(dVals[i][1] || '').trim();",
+        "      if (!nama) continue;",
+        "      const kelas = String(dVals[i][2] || '').trim();",
+        "      const noSoal = String(dVals[i][3] || '').replace(/^No\\.?\\s*/i, '').trim();",
+        "      const key = nama.toLowerCase() + '__' + kelas.toLowerCase();",
+        "      if (!recapMap[key]) {",
+        "        recapMap[key] = { timestamp: String(dVals[i][0] || ''), nama: nama, kelas: kelas === '-' ? '' : kelas, cloudSynced: true, driveLinks: {}, rincian: [] };",
+        "      }",
+        "      recapMap[key].timestamp = String(dVals[i][0] || recapMap[key].timestamp);",
+        "      if (dVals[i][8]) recapMap[key].driveLinks[noSoal] = String(dVals[i][8]);",
+        "      recapMap[key].rincian.push({",
+        "        noSoal: noSoal,",
+        "        topik: String(dVals[i][4] || 'Uraian'),",
+        "        skor: Number(dVals[i][5]) || 0,",
+        "        catatanUmum: String(dVals[i][6] || ''),",
+        "        transkripsi: String(dVals[i][7] || '')",
+        "      });",
+        "    }",
+        "  }",
+        "  result.recaps = Object.keys(recapMap).map(function(k) { return recapMap[k]; });",
+        "  return result;",
+        "}"
+      ].join("\n");
+    }
+
+    function openCloudSettingsModal() {
+      const scriptCode = getGoogleAppsScriptTemplate();
+      openModal(`
+        <div class="p-6 space-y-5">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <h3 class="text-base sm:text-lg font-bold text-slate-900">Pengaturan Google Sheets &amp; Drive</h3>
+              <p class="text-xs text-slate-500">Hubungkan ke Google Apps Script agar data &amp; foto tersinkron otomatis lintas perangkat.</p>
+            </div>
+            <button type="button" onclick="closeModal()" class="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <div class="space-y-3">
+            <div>
+              <label for="input-gas-url" class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                URL Web App Google Apps Script (/exec)
+              </label>
+              <input type="url" id="input-gas-url" value="${escapeHtml(state.cloudConfig.gasUrl)}"
+                placeholder="https://script.google.com/macros/s/.../exec"
+                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+            </div>
+
+            <div>
+              <label for="input-custom-gemini-key" class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                Gemini API Key Kustom (Opsional jika dipakai di luar pratinjau)
+              </label>
+              <input type="password" id="input-custom-gemini-key" value="${escapeHtml(state.cloudConfig.customGeminiKey)}"
+                placeholder="Kosongkan jika menggunakan kunci bawaan pratinjau..."
+                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+            </div>
+
+            <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
+              <input type="checkbox" id="chk-cloud-autosync" ${state.cloudConfig.autoSync ? "checked" : ""}
+                class="w-4 h-4 rounded border-slate-300 text-[#1A47E8]" />
+              <span>Sinkronisasi otomatis ke Google Sheets &amp; Drive setiap kali menyimpan nilai / mengubah soal</span>
+            </label>
+
+            <div class="flex flex-wrap items-center gap-2 pt-1">
+              <button type="button" onclick="saveCloudSettings(true)"
+                class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#1A47E8] hover:bg-[#153AC4] text-white text-xs font-bold shadow-xs transition-colors">
+                <i data-lucide="save" class="w-3.5 h-3.5"></i>
+                <span>Simpan &amp; Tarik Data Sheets</span>
+              </button>
+              <button type="button" onclick="testCloudConnection()"
+                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold transition-colors">
+                <i data-lucide="wifi" class="w-3.5 h-3.5 text-[#1A47E8]"></i>
+                <span>Tes Koneksi</span>
+              </button>
+              <button type="button" onclick="syncAppConfigToCloud()"
+                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 text-xs font-bold transition-colors">
+                <i data-lucide="cloud-upload" class="w-3.5 h-3.5"></i>
+                <span>Simpan Siswa, Soal &amp; Rubrik</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="rounded-xl bg-blue-50/70 border border-blue-200/80 p-4 space-y-2.5">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-bold text-blue-950">Kode Google Apps Script Terbaru (Rekap, Detail, Siswa, Soal &amp; Rubrik)</span>
+              <button type="button" onclick="copyTextToClipboard(document.getElementById('gas-code-box').value, 'Kode Google Apps Script disalin!')"
+                class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#1A47E8] hover:bg-[#153AC4] text-white text-[11px] font-bold">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                <span>Salin Kode</span>
+              </button>
+            </div>
+            <textarea id="gas-code-box" rows="6" readonly
+              class="w-full p-2.5 rounded-lg border border-blue-200 bg-white text-[11px] font-mono text-slate-700 focus:outline-none">${escapeHtml(scriptCode)}</textarea>
+            <p class="text-[11px] text-blue-900/80 leading-relaxed">
+              Otomatis membuat tab <strong>Rekap Nilai</strong>, <strong>Detail Jawaban &amp; Foto</strong>, <strong>Daftar Siswa</strong>, <strong>Soal &amp; Rubrik</strong>, serta <strong>Database Aplikasi</strong>. Tempel kode ini di <strong>Ekstensi → Apps Script</strong> lalu klik <strong>Terapkan → Kelola deployment → Edit → Versi baru → Terapkan</strong>.
+            </p>
+          </div>
+        </div>
+      `);
+    }
+
+    async function saveCloudSettings(andPull = false) {
+      const url = (document.getElementById("input-gas-url")?.value || "").trim();
+      const customKey = (document.getElementById("input-custom-gemini-key")?.value || "").trim();
+      const autoSync = Boolean(document.getElementById("chk-cloud-autosync")?.checked);
+
+      state.cloudConfig.gasUrl = url;
+      state.cloudConfig.customGeminiKey = customKey;
+      state.cloudConfig.autoSync = autoSync;
+      persistState();
+      updateGlobalCounters();
+      closeModal();
+      showToast("Pengaturan Cloud disimpan!", "success");
+
+      if (andPull && url) {
+        await pullDataFromCloud();
+      }
+    }
+
+    async function testCloudConnection() {
+      const url = (document.getElementById("input-gas-url")?.value || state.cloudConfig.gasUrl || "").trim();
+      if (!url) {
+        showToast("Tempel URL Web App (/exec) terlebih dahulu.", "warning");
+        return;
+      }
+      showToast("Menguji koneksi ke Google Apps Script...", "info");
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.status === "ok") {
+          showToast(data.message || "Koneksi berhasil!", "success");
+        } else {
+          throw new Error(data.message || "Respons tidak valid.");
+        }
+      } catch (err) {
+        showToast("Gagal terhubung: " + err.message, "error");
+      }
+    }
+
+    async function syncAppConfigToCloud(options = {}) {
+      const url = (document.getElementById("input-gas-url")?.value || state.cloudConfig.gasUrl || "").trim();
+      if (!url) {
+        if (!options.silent) showToast("URL Google Apps Script belum diatur.", "warning");
+        return false;
+      }
+
+      try {
+        if (!options.silent) showToast("Menyimpan daftar siswa, soal, kunci & rubrik ke Sheets...", "info");
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({
+            action: "save_config",
+            bobotUraianMaks: state.bobotUraianMaks,
+            targetJumlahSoal: state.targetJumlahSoal,
+            students: state.students,
+            studentsImported: state.studentsImported,
+            questions: state.questions
+          })
+        });
+        const data = await res.json();
+        if (data.status === "ok") {
+          if (!options.silent) {
+            showToast("Data siswa, kelas, soal, kunci & rubrik berhasil disimpan ke Google Sheets!", "success");
+          }
+          return true;
+        }
+        throw new Error(data.message || "Gagal menyimpan konfigurasi.");
+      } catch (err) {
+        if (!options.silent) showToast("Gagal simpan ke Sheets: " + err.message, "error");
+        return false;
+      }
+    }
+
+    async function syncSingleRecapToCloud(recapItem, imagesMap = {}, options = {}) {
+      const url = (state.cloudConfig.gasUrl || "").trim();
+      if (!url) return false;
+
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({
+            action: "save_recap",
+            timestamp: recapItem.timestamp,
+            nama: recapItem.nama,
+            kelas: recapItem.kelas,
+            nilai: recapItem.totalSkor,
+            totalSkor: recapItem.totalSkor,
+            rataRata: recapItem.totalSkor,
+            rincian: recapItem.rincian || [],
+            existingDriveLinks: recapItem.driveLinks || {},
+            images: imagesMap
+          })
+        });
+        const data = await res.json();
+        if (data.status === "ok") {
+          recapItem.cloudSynced = true;
+          if (data.driveLinks) {
+            recapItem.driveLinks = { ...(recapItem.driveLinks || {}), ...data.driveLinks };
+          }
+          persistState();
+          if (state.activeTab === "rekap") renderRekapTab();
+          if (!options.silent) showToast(`Data ${recapItem.nama} tersinkron ke Sheets & Drive!`, "success");
+          return true;
+        }
+        throw new Error(data.message || "Gagal sinkronisasi.");
+      } catch (err) {
+        if (!options.silent) showToast(`Gagal kirim ${recapItem.nama} ke Sheets: ${err.message}`, "error");
+        return false;
+      }
+    }
+
+    async function syncAllRecapsToCloud() {
+      if (!state.cloudConfig.gasUrl) {
+        openCloudSettingsModal();
+        showToast("Silakan atur URL Google Apps Script terlebih dahulu.", "warning");
+        return;
+      }
+      const btn = document.getElementById("btn-sync-all-cloud");
+      if (btn) btn.disabled = true;
+
+      showToast("Menyinkronkan seluruh data ke Google Sheets & Drive...", "info");
+      await syncAppConfigToCloud({ silent: true });
+
+      let okCount = 0;
+      for (const rec of state.recaps) {
+        const ok = await syncSingleRecapToCloud(rec, {}, { silent: true });
+        if (ok) okCount++;
+      }
+
+      if (btn) btn.disabled = false;
+      renderRekapTab();
+      showToast(`Sinkronisasi selesai (${okCount}/${state.recaps.length} siswa & konfigurasi tersimpan di Sheets).`, "success");
+    }
+
+    async function pullDataFromCloud(options = {}) {
+      const url = (state.cloudConfig.gasUrl || "").trim();
+      if (!url) {
+        if (!options.silent) {
+          openCloudSettingsModal();
+          showToast("Atur URL Google Apps Script terlebih dahulu.", "warning");
+        }
+        return false;
+      }
+
+      const btn = document.getElementById("btn-pull-cloud");
+      if (btn) btn.disabled = true;
+
+      try {
+        if (!options.silent) showToast("Menarik data terbaru dari Google Sheets...", "info");
+        const sep = url.includes("?") ? "&" : "?";
+        const res = await fetch(`${url}${sep}action=load_all`);
+        const json = await res.json();
+        if (json.status !== "ok" || !json.data) {
+          throw new Error(json.message || "Data dari Sheets tidak valid.");
+        }
+
+        const { config, recaps } = json.data;
+        if (config) {
+          if (config.bobotUraianMaks) state.bobotUraianMaks = Number(config.bobotUraianMaks);
+          if (config.targetJumlahSoal) state.targetJumlahSoal = Number(config.targetJumlahSoal);
+          if (Array.isArray(config.students) && config.students.length > 0) {
+            state.students = config.students;
+            state.studentsImported = true;
+            const availableClasses = [...new Set(state.students.map((s) => s.kelas).filter(Boolean))];
+            if (state.currentStudentClass && !availableClasses.includes(state.currentStudentClass)) {
+              state.currentStudentClass = availableClasses[0] || "";
+            } else if (!state.currentStudentClass && availableClasses.length > 0) {
+              state.currentStudentClass = availableClasses[0];
+            }
+          }
+          if (Array.isArray(config.questions) && config.questions.length > 0) {
+            state.questions = config.questions;
+          }
+        }
+        if (Array.isArray(recaps) && recaps.length > 0) {
+          state.recaps = normalizeAndMergeRecaps([...state.recaps, ...recaps]);
+        }
+
+        persistState();
+        updateGlobalCounters();
+        if (state.activeTab === "scan") renderScanTab();
+        if (state.activeTab === "soal") renderSoalTab();
+        if (state.activeTab === "rekap") renderRekapTab();
+
+        if (!options.silent) showToast("Data dari Google Spreadsheet berhasil dimuat ke aplikasi!", "success");
+        return true;
+      } catch (err) {
+        if (!options.silent) showToast("Gagal menarik data dari Sheets: " + err.message, "error");
+        return false;
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    // =========================================================================
+    // 9. INISIALISASI APLIKASI
+    // =========================================================================
+    function initApp() {
+      loadState();
+      updateGlobalCounters();
+      resetQuestionForm();
+      renderScanTab();
+      lucide.createIcons();
+
+      if (state.cloudConfig.gasUrl && state.cloudConfig.autoSync) {
+        pullDataFromCloud({ silent: true });
+      }
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initApp);
+    } else {
+      initApp();
+    }
+  </script>
+</body>
+</html>
