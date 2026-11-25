@@ -2336,15 +2336,17 @@ ${teksSoal}`;
         "  try {",
         "    const body = JSON.parse(e.postData.contents || '{}');",
         "    const ss = SpreadsheetApp.getActiveSpreadsheet();",
-        "    if (body.action === 'sync_config') {",
-        "      simpanConfigAplikasi(ss, body.config || {});",
+        "    const act = String(body.action || '').trim();",
+        "    if (act === 'sync_config' || body.config) {",
+        "      simpanConfigAplikasi(ss, body.config || body);",
         "      return jsonOut({ status: 'ok', message: 'Konfigurasi, siswa & soal tersimpan.' });",
         "    }",
-        "    if (body.action === 'sync_recap') {",
-        "      const hasil = simpanRekapDanFoto(ss, body.recap || {});",
+        "    if (act === 'sync_recap' || body.recap || (body.nama && (body.scoresByNo || body.detailsByNo))) {",
+        "      const targetRecap = body.recap || body;",
+        "      const hasil = simpanRekapDanFoto(ss, targetRecap);",
         "      return jsonOut({ status: 'ok', ...hasil });",
         "    }",
-        "    return jsonOut({ status: 'error', message: 'Action tidak dikenal.' });",
+        "    return jsonOut({ status: 'error', message: 'Action tidak dikenal: ' + act });",
         "  } catch (err) {",
         "    return jsonOut({ status: 'error', message: String(err) });",
         "  }",
@@ -2688,6 +2690,10 @@ ${teksSoal}`;
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify({
             action: "sync_recap",
+            nama: recap.nama,
+            kelas: recap.kelas,
+            totalSkor: recap.totalSkor,
+            scoresByNo: recap.scoresByNo,
             recap: {
               ...recap,
               detailsByNo: cleanDetails
@@ -2748,41 +2754,6 @@ ${teksSoal}`;
       } finally {
         if (btn) btn.disabled = false;
       }
-    }
-
-    async function syncSingleRecapToCloud(recap, options = {}) {
-      const gasUrl = state.cloudConfig.gasUrl || DEFAULT_GAS_URL;
-      if (!gasUrl || !recap) return;
-      try {
-        await fetch(gasUrl, {
-          method: "POST",
-          mode: "no-cors",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({
-            action: "sync_recap",
-            recap
-          })
-        });
-        state.cloudConfig.lastSyncAt = new Date().toLocaleString("id-ID");
-        persistState();
-        if (!options.silent) {
-          showToast(`Data & foto ${recap.nama} tersimpan ke Google Sheets & Drive!`, "success");
-        }
-      } catch (err) {
-        if (!options.silent) showToast("Gagal sinkron ke Sheets/Drive: " + err.message, "error");
-      }
-    }
-
-    async function syncAllRecapsToCloud() {
-      if (state.recaps.length === 0) {
-        return showToast("Belum ada data rekap untuk dikirim.", "warning");
-      }
-      showToast(`Mengirim ${state.recaps.length} data siswa ke Google Sheets...`, "info");
-      for (const r of state.recaps) {
-        await syncSingleRecapToCloud(r, { silent: true });
-      }
-      await syncAppConfigToCloud({ silent: true });
-      showToast("Seluruh rekap nilai, siswa & soal berhasil disimpan ke Google Sheets!", "success");
     }
 
     async function pullDataFromCloud(options = {}) {
