@@ -511,10 +511,36 @@
 
         <!-- Tabel Rekap Nilai (Tablet & Desktop) -->
         <div class="hidden md:block overflow-x-auto custom-scroll border border-slate-200 rounded-2xl">
-          <table class="w-full text-left border-collapse min-w-[680px]">
+          <table class="w-full text-left border-collapse min-w-[780px]">
             <thead id="rekap-table-head" class="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-600"></thead>
             <tbody id="rekap-table-body" class="divide-y divide-slate-100 text-sm"></tbody>
           </table>
+        </div>
+
+        <!-- Bar Impor Nilai Pilihan Ganda (Google Form / Excel) -->
+        <div class="rounded-2xl border border-emerald-200/80 bg-emerald-50/50 p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div class="space-y-0.5">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="px-2.5 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-extrabold uppercase tracking-wider">Pilihan Ganda 70%</span>
+              <h3 class="text-xs sm:text-sm font-bold text-emerald-950">Integrasi Nilai Google Form (40 Soal × 1 Poin → Maks 70)</h3>
+            </div>
+            <p id="pg-sync-status-text" class="text-xs text-emerald-800/80">
+              Otomatis membaca tab <strong>Form Responses 1</strong> / <strong>Respon PG</strong> di Spreadsheet saat menekan <strong>Tarik Sheets</strong>, atau unggah Excel/CSV Google Form di samping.
+            </p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 shrink-0">
+            <button type="button" onclick="downloadPgExcelTemplate()"
+              class="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold transition-colors">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              <span>Format PG</span>
+            </button>
+            <label for="input-import-pg-excel"
+              class="cursor-pointer inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-colors">
+              <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>
+              <span>Impor Excel / CSV PG</span>
+            </label>
+            <input type="file" id="input-import-pg-excel" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleImportPgExcel(event)" />
+          </div>
         </div>
       </div>
     </section>
@@ -557,13 +583,16 @@
     // =========================================================================
     // 1. KONFIGURASI & STATE APLIKASI
     // =========================================================================
-    const STORAGE_KEY = "koreksi_psas_mtk9_state_v6";
+    const STORAGE_KEY = "koreksi_psas_mtk9_state_v7";
     const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbwpn7s0mX-bDVzrX9CcKUYWkwIWwVGMuEn6ff-XOHbAqwf9VJiGN-W_QNzULPNndRbJ/exec";
     const GEMINI_MODEL = "gemini-3-flash-preview";
     const apiKey = ""; // Diisi otomatis oleh environment atau lewat pengaturan kustom
 
     const state = {
       activeTab: "scan",
+      bobotPgMaks: 70,
+      jumlahSoalPg: 40,
+      skorPerSoalPg: 1,
       bobotUraianMaks: 30,
       targetJumlahSoal: 5,
       students: [],
@@ -575,9 +604,11 @@
       editingQuestionId: null,
       draftRubric: [],
       sessionAnswers: {}, // { [questionId]: { imageDataUrl, mimeType, fileName, isSharedSheet, grading, loading, error } }
+      pgScores: [], // [{ nama, kelas, rawScore, maxRawScore, nilaiPg70 }]
       recaps: [],
       cloudConfig: {
         gasUrl: DEFAULT_GAS_URL,
+        pgSheetName: "Form Responses 1",
         customApiKeys: [],
         autoSync: true,
         lastSyncAt: ""
@@ -634,8 +665,63 @@
         .sort((a, b) => Number(normalizeNoSoal(a.noSoal)) - Number(normalizeNoSoal(b.noSoal)));
     }
 
+    function computeConvertedPgScore(rawScore, maxRawOverride = null) {
+      const totalSoalPg = Math.max(1, Number(state.jumlahSoalPg) || 40);
+      const skorPerButir = Math.max(0.1, Number(state.skorPerSoalPg) || 1);
+      const maxRaw = maxRawOverride && Number(maxRawOverride) > 0
+        ? Number(maxRawOverride)
+        : totalSoalPg * skorPerButir;
+      const bobotPg = Number(state.bobotPgMaks) || 70;
+      const raw = Math.max(0, Number(rawScore) || 0);
+      const converted = (raw / maxRaw) * bobotPg;
+      return roundScore(Math.min(bobotPg, converted));
+    }
+
+    function normalizeNameForMatch(str) {
+      return String(str || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function normalizeClassForMatch(str) {
+      return String(str || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "")
+        .trim();
+    }
+
+    function findMatchingPgRecord(nama, kelas) {
+      const list = state.pgScores || [];
+      if (list.length === 0) return null;
+      const targetName = normalizeNameForMatch(nama);
+      const targetClass = normalizeClassForMatch(kelas);
+      if (!targetName) return null;
+
+      // 1. Cocok nama persis + kelas persis
+      let found = list.find(
+        (p) => normalizeNameForMatch(p.nama) === targetName && (!targetClass || !normalizeClassForMatch(p.kelas) || normalizeClassForMatch(p.kelas) === targetClass)
+      );
+      if (found) return found;
+
+      // 2. Cocok nama persis tanpa kelas
+      found = list.find((p) => normalizeNameForMatch(p.nama) === targetName);
+      if (found) return found;
+
+      // 3. Cocok sebagian nama (misal nama panggilan / tanpa gelar) dalam kelas yang sama
+      found = list.find((p) => {
+        const pName = normalizeNameForMatch(p.nama);
+        const pClass = normalizeClassForMatch(p.kelas);
+        const classOk = !targetClass || !pClass || pClass === targetClass;
+        return classOk && pName.length >= 4 && (targetName.includes(pName) || pName.includes(targetName));
+      });
+      return found || null;
+    }
+
     function normalizeAndMergeRecaps(list) {
       const map = new Map();
+      // Pastikan siswa yang baru punya nilai PG juga bisa digabungkan bila sudah ada di rekap
       (list || []).forEach((item) => {
         if (!item) return;
         const nama = String(item.nama || "").trim();
@@ -648,7 +734,9 @@
           kelas,
           updatedAt: item.updatedAt || new Date().toLocaleString("id-ID"),
           scoresByNo: {},
-          detailsByNo: {}
+          detailsByNo: {},
+          pgRawScore: null,
+          nilaiPg: null
         };
         if (item.updatedAt) existing.updatedAt = item.updatedAt;
         if (item.scoresByNo && typeof item.scoresByNo === "object") {
@@ -667,8 +755,24 @@
             }
           });
         }
-        const total = Object.values(existing.scoresByNo).reduce((acc, v) => acc + (Number(v) || 0), 0);
-        existing.totalSkor = roundScore(total);
+        if (item.pgRawScore !== undefined && item.pgRawScore !== null && item.pgRawScore !== "") {
+          existing.pgRawScore = Number(item.pgRawScore);
+        }
+        if (item.nilaiPg !== undefined && item.nilaiPg !== null && item.nilaiPg !== "") {
+          existing.nilaiPg = roundScore(item.nilaiPg);
+        }
+
+        const matchedPg = findMatchingPgRecord(nama, kelas);
+        if (matchedPg) {
+          existing.pgRawScore = Number(matchedPg.rawScore);
+          existing.nilaiPg = roundScore(matchedPg.nilaiPg70);
+        } else if (existing.pgRawScore !== null && existing.nilaiPg === null) {
+          existing.nilaiPg = computeConvertedPgScore(existing.pgRawScore);
+        }
+
+        const totalUraian = Object.values(existing.scoresByNo).reduce((acc, v) => acc + (Number(v) || 0), 0);
+        existing.totalSkor = roundScore(totalUraian);
+        existing.nilaiAkhir = roundScore((Number(existing.nilaiPg) || 0) + existing.totalSkor);
         map.set(key, existing);
       });
       return Array.from(map.values()).sort((a, b) => {
@@ -681,6 +785,9 @@
       try {
         const toSave = {
           activeTab: state.activeTab,
+          bobotPgMaks: state.bobotPgMaks,
+          jumlahSoalPg: state.jumlahSoalPg,
+          skorPerSoalPg: state.skorPerSoalPg,
           bobotUraianMaks: state.bobotUraianMaks,
           targetJumlahSoal: state.targetJumlahSoal,
           students: state.students,
@@ -688,6 +795,7 @@
           currentStudentName: state.currentStudentName,
           currentStudentClass: state.currentStudentClass,
           questions: state.questions,
+          pgScores: state.pgScores,
           recaps: state.recaps,
           cloudConfig: state.cloudConfig
         };
@@ -699,10 +807,13 @@
 
     function loadState() {
       try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem("koreksi_psas_mtk9_state_v6");
         if (raw) {
           const parsed = JSON.parse(raw);
           if (parsed.activeTab) state.activeTab = parsed.activeTab;
+          if (parsed.bobotPgMaks) state.bobotPgMaks = Number(parsed.bobotPgMaks);
+          if (parsed.jumlahSoalPg) state.jumlahSoalPg = Number(parsed.jumlahSoalPg);
+          if (parsed.skorPerSoalPg) state.skorPerSoalPg = Number(parsed.skorPerSoalPg);
           if (parsed.bobotUraianMaks) state.bobotUraianMaks = Number(parsed.bobotUraianMaks);
           if (parsed.targetJumlahSoal) state.targetJumlahSoal = Number(parsed.targetJumlahSoal);
           if (Array.isArray(parsed.students)) state.students = parsed.students;
@@ -710,12 +821,14 @@
           if (parsed.currentStudentName) state.currentStudentName = parsed.currentStudentName;
           if (parsed.currentStudentClass) state.currentStudentClass = parsed.currentStudentClass;
           if (Array.isArray(parsed.questions)) state.questions = parsed.questions;
+          if (Array.isArray(parsed.pgScores)) state.pgScores = parsed.pgScores;
           if (Array.isArray(parsed.recaps)) state.recaps = normalizeAndMergeRecaps(parsed.recaps);
           if (parsed.cloudConfig) {
             state.cloudConfig = {
               ...state.cloudConfig,
               ...parsed.cloudConfig,
               gasUrl: parsed.cloudConfig.gasUrl || DEFAULT_GAS_URL,
+              pgSheetName: parsed.cloudConfig.pgSheetName || "Form Responses 1",
               customApiKeys: Array.isArray(parsed.cloudConfig.customApiKeys)
                 ? parsed.cloudConfig.customApiKeys
                 : (parsed.cloudConfig.customApiKey ? [parsed.cloudConfig.customApiKey] : [])
@@ -2069,6 +2182,90 @@ ${teksSoal}`;
     // =========================================================================
     // 6. LOGIKA TAB 3: REKAP NILAI, KIRIM WHATSAPP/EMAIL & EKSPOR EXCEL
     // =========================================================================
+    function downloadPgExcelTemplate() {
+      if (!window.XLSX) return showToast("Library Excel belum siap.", "error");
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet([
+        ["Timestamp", "Score", "Nama Siswa", "Kelas"],
+        ["25/11/2026 09:00:00", "36 / 40", "ADE SETIAWAN", "9-D"],
+        ["25/11/2026 09:05:00", "38 / 40", "ADELIA AMANDA SAFITRI", "9-D"]
+      ]);
+      XLSX.utils.book_append_sheet(wb, ws, "Form Responses 1");
+      XLSX.writeFile(wb, "Format_Respon_PG_GoogleForm_MTK9.xlsx");
+    }
+
+    function parseRawPgScoreCell(val) {
+      if (val === null || val === undefined || val === "") return null;
+      if (typeof val === "number") return { raw: val, max: null };
+      const str = String(val).trim();
+      // Format Google Form seperti "36 / 40" atau "36/40"
+      const slashMatch = str.match(/^(\d+(?:[.,]\d+)?)\s*\/\s*(\d+(?:[.,]\d+)?)$/);
+      if (slashMatch) {
+        return {
+          raw: Number(slashMatch[1].replace(",", ".")),
+          max: Number(slashMatch[2].replace(",", "."))
+        };
+      }
+      const num = Number(str.replace(",", "."));
+      return isNaN(num) ? null : { raw: num, max: null };
+    }
+
+    function handleImportPgExcel(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const wb = XLSX.read(e.target.result, { type: "array" });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+          if (!rows || rows.length < 2) {
+            return showToast("File Excel/CSV PG kosong.", "warning");
+          }
+
+          const header = (rows[0] || []).map((c) => String(c || "").trim().toLowerCase());
+          let scoreCol = header.findIndex((c) => c.includes("score") || c.includes("skor") || c.includes("nilai") || c.includes("poin"));
+          let namaCol = header.findIndex((c) => c.includes("nama") || c.includes("siswa") || c.includes("peserta"));
+          let kelasCol = header.findIndex((c) => c.includes("kelas") || c.includes("rombel"));
+
+          if (scoreCol === -1) scoreCol = 1;
+          if (namaCol === -1) namaCol = 2;
+          if (kelasCol === -1) kelasCol = 3;
+
+          const importedPg = [];
+          for (let i = 1; i < rows.length; i++) {
+            const nama = String(rows[i][namaCol] || "").trim();
+            const kelas = kelasCol >= 0 ? String(rows[i][kelasCol] || "").trim() : "";
+            const parsedScore = parseRawPgScoreCell(rows[i][scoreCol]);
+            if (!nama || !parsedScore) continue;
+            const nilaiPg70 = computeConvertedPgScore(parsedScore.raw, parsedScore.max);
+            importedPg.push({
+              nama,
+              kelas,
+              rawScore: parsedScore.raw,
+              maxRawScore: parsedScore.max || (state.jumlahSoalPg * state.skorPerSoalPg),
+              nilaiPg70
+            });
+          }
+
+          if (importedPg.length === 0) {
+            return showToast("Tidak ditemukan kolom Nama & Skor PG yang valid pada file.", "warning");
+          }
+
+          state.pgScores = importedPg;
+          state.recaps = normalizeAndMergeRecaps(state.recaps);
+          persistState();
+          renderRekapTab();
+          showToast(`${importedPg.length} nilai PG berhasil dimuat & dikonversi ke skala 70!`, "success");
+        } catch (err) {
+          showToast("Gagal membaca file PG: " + err.message, "error");
+        } finally {
+          event.target.value = "";
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
     function getAllRecapQuestionNumbers() {
       const set = new Set();
       getActiveQuestions().forEach((q) => set.add(normalizeNoSoal(q.noSoal)));
@@ -2082,7 +2279,16 @@ ${teksSoal}`;
       const mobileCards = document.getElementById("rekap-mobile-cards");
       const thead = document.getElementById("rekap-table-head");
       const tbody = document.getElementById("rekap-table-body");
+      const pgStatusEl = document.getElementById("pg-sync-status-text");
       const nos = getAllRecapQuestionNumbers();
+
+      if (pgStatusEl) {
+        if (state.pgScores.length > 0) {
+          pgStatusEl.innerHTML = `<strong class="text-emerald-700">${state.pgScores.length} data nilai PG aktif</strong> (40 soal × 1 poin → dikonversi otomatis ke skala maksimal 70) dan otomatis digabung ke nilai akhir siswa.`;
+        } else {
+          pgStatusEl.innerHTML = `Otomatis membaca tab <strong>${escapeHtml(state.cloudConfig.pgSheetName || "Form Responses 1")}</strong> di Spreadsheet saat menekan <strong>Tarik Sheets</strong>, atau unggah Excel/CSV Google Form di samping.`;
+        }
+      }
 
       if (state.recaps.length === 0) {
         if (mobileCards) {
@@ -2104,6 +2310,7 @@ ${teksSoal}`;
                 return `<span class="px-2 py-1 rounded-lg bg-slate-100 text-[11px] font-bold text-slate-700">No.${escapeHtml(no)}: <strong class="text-[#1A47E8]">${val !== undefined ? formatScore(val) : "-"}</strong></span>`;
               })
               .join("");
+            const hasPg = r.nilaiPg !== null && r.nilaiPg !== undefined;
             return `
               <div class="p-4 rounded-2xl border border-slate-200 bg-slate-50/40 space-y-3">
                 <div class="flex items-start justify-between gap-2">
@@ -2112,8 +2319,19 @@ ${teksSoal}`;
                     <span class="inline-block mt-0.5 px-2 py-0.5 rounded-md bg-blue-50 text-[#1A47E8] text-[11px] font-bold">${escapeHtml(r.kelas)}</span>
                   </div>
                   <div class="text-right">
-                    <span class="block text-[10px] font-bold uppercase text-slate-400">Total Skor</span>
-                    <span class="text-lg font-extrabold text-[#1A47E8]">${formatScore(r.totalSkor)}</span>
+                    <span class="block text-[10px] font-bold uppercase text-slate-400">Nilai Akhir (100)</span>
+                    <span class="text-lg font-extrabold text-emerald-600">${formatScore(r.nilaiAkhir)}</span>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                  <div class="px-3 py-2 rounded-xl bg-emerald-50/80 border border-emerald-100">
+                    <span class="block text-[10px] font-bold text-emerald-700">PG (Maks 70)</span>
+                    <strong class="text-sm font-extrabold text-emerald-800">${hasPg ? formatScore(r.nilaiPg) : "-"}</strong>
+                    ${r.pgRawScore !== null && r.pgRawScore !== undefined ? `<span class="text-[10px] text-emerald-600"> (${r.pgRawScore}/40)</span>` : ""}
+                  </div>
+                  <div class="px-3 py-2 rounded-xl bg-blue-50/80 border border-blue-100">
+                    <span class="block text-[10px] font-bold text-[#1A47E8]">Uraian (Maks 30)</span>
+                    <strong class="text-sm font-extrabold text-[#1A47E8]">${formatScore(r.totalSkor)}</strong>
                   </div>
                 </div>
                 <div class="flex flex-wrap gap-1.5">${pills}</div>
@@ -2140,9 +2358,11 @@ ${teksSoal}`;
           <tr>
             <th class="py-3.5 px-4">No</th>
             <th class="py-3.5 px-4">Nama Siswa</th>
-            <th class="py-3.5 px-4">Kelas</th>
-            ${nos.map((no) => `<th class="py-3.5 px-3 text-center">No. ${escapeHtml(no)}</th>`).join("")}
-            <th class="py-3.5 px-4 text-center text-[#1A47E8]">Total Skor (Maks ${formatScore(state.bobotUraianMaks)})</th>
+            <th class="py-3.5 px-3">Kelas</th>
+            <th class="py-3.5 px-3 text-center text-emerald-700 bg-emerald-50/60">PG (Maks 70)</th>
+            ${nos.map((no) => `<th class="py-3.5 px-2.5 text-center">No. ${escapeHtml(no)}</th>`).join("")}
+            <th class="py-3.5 px-3 text-center text-[#1A47E8]">Uraian (${formatScore(state.bobotUraianMaks)})</th>
+            <th class="py-3.5 px-4 text-center text-emerald-800 bg-emerald-50/80">Nilai Akhir (100)</th>
             <th class="py-3.5 px-4 text-right">Aksi</th>
           </tr>
         `;
@@ -2150,19 +2370,24 @@ ${teksSoal}`;
 
       if (tbody) {
         tbody.innerHTML = state.recaps
-          .map(
-            (r, idx) => `
+          .map((r, idx) => {
+            const hasPg = r.nilaiPg !== null && r.nilaiPg !== undefined;
+            return `
             <tr class="hover:bg-slate-50/80 transition-colors">
               <td class="py-3 px-4 font-semibold text-slate-500">${idx + 1}</td>
               <td class="py-3 px-4 font-bold text-slate-900">${escapeHtml(r.nama)}</td>
-              <td class="py-3 px-4"><span class="px-2.5 py-1 rounded-lg bg-slate-100 text-xs font-bold text-slate-700">${escapeHtml(r.kelas)}</span></td>
+              <td class="py-3 px-3"><span class="px-2.5 py-1 rounded-lg bg-slate-100 text-xs font-bold text-slate-700">${escapeHtml(r.kelas)}</span></td>
+              <td class="py-3 px-3 text-center font-bold text-emerald-700 bg-emerald-50/30">
+                ${hasPg ? `${formatScore(r.nilaiPg)} <span class="block text-[10px] font-normal text-slate-400">(${r.pgRawScore}/40)</span>` : `<span class="text-slate-300">-</span>`}
+              </td>
               ${nos
                 .map((no) => {
                   const val = r.scoresByNo?.[no];
-                  return `<td class="py-3 px-3 text-center font-semibold ${val !== undefined ? "text-slate-800" : "text-slate-300"}">${val !== undefined ? formatScore(val) : "-"}</td>`;
+                  return `<td class="py-3 px-2.5 text-center font-semibold ${val !== undefined ? "text-slate-800" : "text-slate-300"}">${val !== undefined ? formatScore(val) : "-"}</td>`;
                 })
                 .join("")}
-              <td class="py-3 px-4 text-center font-extrabold text-base text-[#1A47E8]">${formatScore(r.totalSkor)}</td>
+              <td class="py-3 px-3 text-center font-extrabold text-[#1A47E8]">${formatScore(r.totalSkor)}</td>
+              <td class="py-3 px-4 text-center font-extrabold text-base text-emerald-700 bg-emerald-50/40">${formatScore(r.nilaiAkhir)}</td>
               <td class="py-3 px-4 text-right">
                 <div class="inline-flex items-center gap-1.5">
                   <button type="button" onclick="openSendResultModal('${r.id}')"
@@ -2177,8 +2402,8 @@ ${teksSoal}`;
                 </div>
               </td>
             </tr>
-          `
-          )
+          `;
+          })
           .join("");
       }
 
@@ -2197,9 +2422,14 @@ ${teksSoal}`;
         })
         .join("\n");
 
-      const msg = `*HASIL KOREKSI URAIAN PSAS MATEMATIKA KELAS 9*\nNama: *${r.nama}*\nKelas: *${r.kelas}*\n\n${lines}\n\n*Total Skor Uraian: ${formatScore(r.totalSkor)} / ${formatScore(state.bobotUraianMaks)}*`;
+      const hasPg = r.nilaiPg !== null && r.nilaiPg !== undefined;
+      const pgLine = hasPg
+        ? `• Nilai Pilihan Ganda (70%): *${formatScore(r.nilaiPg)}* / 70 (Benar ${r.pgRawScore}/40)\n`
+        : "";
+
+      const msg = `*HASIL PSAS MATEMATIKA KELAS 9*\nNama: *${r.nama}*\nKelas: *${r.kelas}*\n\n${pgLine}*Rincian Uraian (30%):*\n${lines}\n• Total Skor Uraian: *${formatScore(r.totalSkor)}* / ${formatScore(state.bobotUraianMaks)}\n\n*NILAI AKHIR PSAS: ${formatScore(r.nilaiAkhir)} / 100*`;
       const waUrl = `https://wa.me/?text=${encodeURIComponent(msg)}`;
-      const mailUrl = `mailto:?subject=${encodeURIComponent(`Hasil Koreksi PSAS MTK 9 - ${r.nama}`)}&body=${encodeURIComponent(msg.replace(/\*/g, ""))}`;
+      const mailUrl = `mailto:?subject=${encodeURIComponent(`Hasil PSAS MTK 9 - ${r.nama}`)}&body=${encodeURIComponent(msg.replace(/\*/g, ""))}`;
 
       openModal(`
         <div class="p-5 sm:p-6 space-y-4">
@@ -2258,13 +2488,22 @@ ${teksSoal}`;
 
       try {
         const wb = new ExcelJS.Workbook();
-        const ws = wb.addWorksheet("Rekap Nilai Uraian");
+        const ws = wb.addWorksheet("Rekap Nilai PSAS");
         const nos = getAllRecapQuestionNumbers();
-        const headers = ["No", "Nama Siswa", "Kelas", ...nos.map((n) => `No. ${n}`), `Total Skor (Maks ${formatScore(state.bobotUraianMaks)})`];
+        const headers = [
+          "No",
+          "Nama Siswa",
+          "Kelas",
+          "Benar PG (40)",
+          "Nilai PG (70)",
+          ...nos.map((n) => `Uraian No. ${n}`),
+          `Total Uraian (${formatScore(state.bobotUraianMaks)})`,
+          "Nilai Akhir (100)"
+        ];
 
         ws.mergeCells(1, 1, 1, headers.length);
         const titleCell = ws.getCell(1, 1);
-        titleCell.value = "REKAPITULASI NILAI URAIAN PSAS MATEMATIKA KELAS 9";
+        titleCell.value = "REKAPITULASI NILAI AKHIR PSAS MATEMATIKA KELAS 9 (PG 70% + URAIAN 30%)";
         titleCell.font = { name: "Calibri", size: 13, bold: true, color: { argb: "FF1A47E8" } };
         titleCell.alignment = { horizontal: "center", vertical: "middle" };
         ws.getRow(1).height = 26;
@@ -2284,8 +2523,11 @@ ${teksSoal}`;
             idx + 1,
             r.nama,
             r.kelas,
+            r.pgRawScore !== null && r.pgRawScore !== undefined ? Number(r.pgRawScore) : "-",
+            r.nilaiPg !== null && r.nilaiPg !== undefined ? Number(r.nilaiPg) : "-",
             ...nos.map((no) => (r.scoresByNo?.[no] !== undefined ? Number(r.scoresByNo[no]) : "-")),
-            Number(r.totalSkor) || 0
+            Number(r.totalSkor) || 0,
+            Number(r.nilaiAkhir) || 0
           ];
           const row = ws.addRow(rowVals);
           row.eachCell((cell, colNum) => {
@@ -2295,7 +2537,7 @@ ${teksSoal}`;
         });
 
         ws.columns.forEach((col, i) => {
-          col.width = i === 1 ? 28 : i === 0 ? 6 : 14;
+          col.width = i === 1 ? 28 : i === 0 ? 6 : 15;
         });
 
         const buf = await wb.xlsx.writeBuffer();
@@ -2303,17 +2545,17 @@ ${teksSoal}`;
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `Rekap_Nilai_Uraian_PSAS_MTK9_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        a.download = `Rekap_Nilai_Akhir_PSAS_MTK9_${new Date().toISOString().slice(0, 10)}.xlsx`;
         a.click();
         URL.revokeObjectURL(url);
-        showToast("File Excel rekap nilai berhasil diunduh!", "success");
+        showToast("File Excel rekap nilai akhir berhasil diunduh!", "success");
       } catch (err) {
         showToast("Gagal mengekspor Excel: " + err.message, "error");
       }
     }
 
     // =========================================================================
-    // 7. INTEGRASI GOOGLE SHEETS & GOOGLE DRIVE (SINKRONISASI 2 ARAH)
+    // 7. INTEGRASI GOOGLE SHEETS & GOOGLE DRIVE (SINKRONISASI 2 ARAH + PG GFORM)
     // =========================================================================
     function getGoogleAppsScriptTemplate() {
       return [
@@ -2323,13 +2565,17 @@ ${teksSoal}`;
         "const NAMA_SHEET_SISWA = 'Daftar Siswa';",
         "const NAMA_SHEET_SOAL = 'Soal & Rubrik';",
         "const NAMA_SHEET_CONFIG = 'Database Aplikasi';",
+        "const NAMA_SHEET_PG_GFORM = 'Form Responses 1'; // Ubah jika nama tab respon Google Form Anda berbeda",
+        "const JUMLAH_SOAL_PG = 40;",
+        "const SKOR_PER_SOAL_PG = 1;",
+        "const BOBOT_MAKS_PG = 70;",
         "",
         "function doGet(e) {",
         "  const ss = SpreadsheetApp.getActiveSpreadsheet();",
         "  if (e && e.parameter && e.parameter.action === 'load_all') {",
         "    return jsonOut({ status: 'ok', data: ambilSemuaData(ss) });",
         "  }",
-        "  return jsonOut({ status: 'ok', message: 'Web App Koreksi PSAS MTK 9 aktif.' });",
+        "  return jsonOut({ status: 'ok', message: 'Web App Koreksi PSAS MTK 9 (PG 70 + Uraian 30) aktif.' });",
         "}",
         "",
         "function doPost(e) {",
@@ -2354,6 +2600,62 @@ ${teksSoal}`;
         "",
         "function jsonOut(obj) {",
         "  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);",
+        "}",
+        "",
+        "function parseSkorPgGoogleForm(val) {",
+        "  if (val === null || val === undefined || val === '') return null;",
+        "  if (typeof val === 'number') return { raw: val, max: JUMLAH_SOAL_PG * SKOR_PER_SOAL_PG };",
+        "  const s = String(val).trim();",
+        "  const m = s.match(/^(\\d+(?:[.,]\\d+)?)\\s*\\/\\s*(\\d+(?:[.,]\\d+)?)$/);",
+        "  if (m) {",
+        "    return { raw: Number(m[1].replace(',', '.')), max: Number(m[2].replace(',', '.')) };",
+        "  }",
+        "  const num = Number(s.replace(',', '.'));",
+        "  return isNaN(num) ? null : { raw: num, max: JUMLAH_SOAL_PG * SKOR_PER_SOAL_PG };",
+        "}",
+        "",
+        "function konversiSkorPgKe70(rawScore, maxRaw) {",
+        "  const pembagi = (maxRaw && maxRaw > 0) ? maxRaw : (JUMLAH_SOAL_PG * SKOR_PER_SOAL_PG);",
+        "  const hasil = (Math.max(0, Number(rawScore) || 0) / pembagi) * BOBOT_MAKS_PG;",
+        "  return Math.round(Math.min(BOBOT_MAKS_PG, hasil) * 100) / 100;",
+        "}",
+        "",
+        "function bacaResponPgDariGoogleForm(ss) {",
+        "  let sheet = ss.getSheetByName(NAMA_SHEET_PG_GFORM);",
+        "  if (!sheet) {",
+        "    const allSheets = ss.getSheets();",
+        "    for (let s = 0; s < allSheets.length; s++) {",
+        "      const nm = allSheets[s].getName().trim().toLowerCase();",
+        "      if (nm.indexOf('form responses') !== -1 || nm.indexOf('respon') !== -1 || nm.indexOf('pg') !== -1) {",
+        "        sheet = allSheets[s];",
+        "        break;",
+        "      }",
+        "    }",
+        "  }",
+        "  if (!sheet || sheet.getLastRow() < 2) return [];",
+        "  const vals = sheet.getDataRange().getValues();",
+        "  const header = (vals[0] || []).map(function(c) { return String(c || '').trim().toLowerCase(); });",
+        "  let scoreCol = header.findIndex(function(c) { return c.indexOf('score') !== -1 || c.indexOf('skor') !== -1 || c.indexOf('nilai') !== -1; });",
+        "  let namaCol = header.findIndex(function(c) { return c.indexOf('nama') !== -1 || c.indexOf('siswa') !== -1 || c.indexOf('peserta') !== -1; });",
+        "  let kelasCol = header.findIndex(function(c) { return c.indexOf('kelas') !== -1 || c.indexOf('rombel') !== -1; });",
+        "  if (scoreCol === -1) scoreCol = 1;",
+        "  if (namaCol === -1) namaCol = 2;",
+        "  if (kelasCol === -1) kelasCol = 3;",
+        "",
+        "  const mapPg = {};",
+        "  for (let i = 1; i < vals.length; i++) {",
+        "    const nama = String(vals[i][namaCol] || '').trim();",
+        "    const kelas = kelasCol >= 0 ? String(vals[i][kelasCol] || '').trim() : '';",
+        "    const parsed = parseSkorPgGoogleForm(vals[i][scoreCol]);",
+        "    if (!nama || !parsed) continue;",
+        "    const nilaiPg70 = konversiSkorPgKe70(parsed.raw, parsed.max);",
+        "    const key = nama.toLowerCase() + '|' + kelas.toLowerCase();",
+        "    // Jika siswa mengirim lebih dari 1 kali, ambil skor tertinggi atau respon terbaru",
+        "    if (!mapPg[key] || nilaiPg70 >= mapPg[key].nilaiPg70) {",
+        "      mapPg[key] = { nama: nama, kelas: kelas, rawScore: parsed.raw, maxRawScore: parsed.max, nilaiPg70: nilaiPg70 };",
+        "    }",
+        "  }",
+        "  return Object.keys(mapPg).map(function(k) { return mapPg[k]; });",
         "}",
         "",
         "function simpanKeSheetSiswa(ss, students) {",
@@ -2437,7 +2739,7 @@ ${teksSoal}`;
         "}",
         "",
         "function ambilSemuaData(ss) {",
-        "  const result = { config: null, recaps: [] };",
+        "  const result = { config: null, recaps: [], pgScores: [] };",
         "  const cfgSheet = ss.getSheetByName(NAMA_SHEET_CONFIG);",
         "  if (cfgSheet && cfgSheet.getLastRow() >= 2) {",
         "    try {",
@@ -2452,6 +2754,8 @@ ${teksSoal}`;
         "    result.config.students = loadedStudents;",
         "    result.config.studentsImported = true;",
         "  }",
+        "",
+        "  result.pgScores = bacaResponPgDariGoogleForm(ss);",
         "",
         "  const recapMap = {};",
         "  const detSheet = ss.getSheetByName(NAMA_SHEET_DETAIL);",
@@ -2483,6 +2787,19 @@ ${teksSoal}`;
         "function getOrCreateFolder(parent, name) {",
         "  const it = parent.getFoldersByName(name);",
         "  return it.hasNext() ? it.next() : parent.createFolder(name);",
+        "}",
+        "",
+        "function cariNilaiPgSiswa(pgList, nama, kelas) {",
+        "  const targetNama = String(nama || '').toLowerCase().replace(/[^a-z0-9\\s]/g, ' ').replace(/\\s+/g, ' ').trim();",
+        "  const targetKelas = String(kelas || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();",
+        "  for (let i = 0; i < pgList.length; i++) {",
+        "    const pNama = String(pgList[i].nama || '').toLowerCase().replace(/[^a-z0-9\\s]/g, ' ').replace(/\\s+/g, ' ').trim();",
+        "    const pKelas = String(pgList[i].kelas || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();",
+        "    if (pNama === targetNama && (!targetKelas || !pKelas || pKelas === targetKelas)) {",
+        "      return pgList[i];",
+        "    }",
+        "  }",
+        "  return null;",
         "}",
         "",
         "function simpanRekapDanFoto(ss, recap) {",
@@ -2530,17 +2847,23 @@ ${teksSoal}`;
         "  let rekSheet = ss.getSheetByName(NAMA_SHEET_REKAP);",
         "  if (!rekSheet) {",
         "    rekSheet = ss.insertSheet(NAMA_SHEET_REKAP);",
-        "    rekSheet.appendRow(['Waktu Update', 'Nama Siswa', 'Kelas', 'Nilai', 'Rincian Skor', 'Link Foto Drive']);",
-        "    rekSheet.getRange(1, 1, 1, 6).setBackground('#1A47E8').setFontColor('#FFFFFF').setFontWeight('bold');",
+        "    rekSheet.appendRow(['Waktu Update', 'Nama Siswa', 'Kelas', 'Nilai PG (70)', 'Nilai Uraian (30)', 'Nilai Akhir (100)', 'Rincian Skor Uraian', 'Link Foto Drive']);",
+        "    rekSheet.getRange(1, 1, 1, 8).setBackground('#1A47E8').setFontColor('#FFFFFF').setFontWeight('bold');",
         "    rekSheet.setFrozenRows(1);",
-        "  } else if (String(rekSheet.getRange(1, 4).getValue()).trim() === 'Rata-Rata') {",
-        "    rekSheet.getRange(1, 4).setValue('Nilai');",
+        "  } else if (rekSheet.getLastColumn() < 8) {",
+        "    rekSheet.getRange(1, 1, 1, 8).setValues([['Waktu Update', 'Nama Siswa', 'Kelas', 'Nilai PG (70)', 'Nilai Uraian (30)', 'Nilai Akhir (100)', 'Rincian Skor Uraian', 'Link Foto Drive']]);",
+        "    rekSheet.getRange(1, 1, 1, 8).setBackground('#1A47E8').setFontColor('#FFFFFF').setFontWeight('bold');",
         "  }",
+        "",
+        "  const pgList = bacaResponPgDariGoogleForm(ss);",
+        "  const matchedPg = cariNilaiPgSiswa(pgList, nama, kelas);",
+        "  const nilaiPg = matchedPg ? matchedPg.nilaiPg70 : (Number(recap.nilaiPg) || 0);",
+        "  const nilaiUraian = Number(recap.totalSkor) || 0;",
+        "  const nilaiAkhir = Math.round((nilaiPg + nilaiUraian) * 100) / 100;",
         "",
         "  const scores = recap.scoresByNo || {};",
         "  const rincianStr = Object.keys(scores).sort().map(function(n) { return 'No.' + n + ': ' + scores[n]; }).join(' | ');",
         "  const linksStr = Object.keys(driveLinks).sort().map(function(n) { return 'No.' + n + ': ' + driveLinks[n]; }).join('\\n');",
-        "  const nilaiAkhir = Number(recap.totalSkor) || 0;",
         "",
         "  const rekRows = rekSheet.getDataRange().getValues();",
         "  let foundRekRow = -1;",
@@ -2550,11 +2873,11 @@ ${teksSoal}`;
         "      break;",
         "    }",
         "  }",
-        "  const rekData = [waktu, nama, kelas, nilaiAkhir, rincianStr, linksStr];",
-        "  if (foundRekRow > 0) rekSheet.getRange(foundRekRow, 1, 1, 6).setValues([rekData]);",
+        "  const rekData = [waktu, nama, kelas, nilaiPg, nilaiUraian, nilaiAkhir, rincianStr, linksStr];",
+        "  if (foundRekRow > 0) rekSheet.getRange(foundRekRow, 1, 1, 8).setValues([rekData]);",
         "  else rekSheet.appendRow(rekData);",
         "",
-        "  return { driveLinks: driveLinks };",
+        "  return { driveLinks: driveLinks, nilaiPg: nilaiPg, nilaiAkhir: nilaiAkhir };",
         "}"
       ].join("\n");
     }
@@ -2578,6 +2901,16 @@ ${teksSoal}`;
               <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">URL Web App Google Apps Script (/exec)</label>
               <input type="url" id="modal-gas-url" value="${escapeHtml(state.cloudConfig.gasUrl || DEFAULT_GAS_URL)}"
                 class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono text-slate-800" />
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Nama Tab Respon Google Form PG di Spreadsheet</label>
+              <input type="text" id="modal-pg-sheet-name" value="${escapeHtml(state.cloudConfig.pgSheetName || "Form Responses 1")}"
+                placeholder="Misal: Form Responses 1"
+                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800" />
+              <p class="text-[11px] text-slate-500 mt-1">
+                Rumus konversi otomatis: <strong>(Skor Benar / 40) × 70</strong>. Pastikan tab respon Google Form ada di Spreadsheet yang sama.
+              </p>
             </div>
 
             <div>
@@ -2627,6 +2960,7 @@ ${teksSoal}`;
 
     async function saveCloudSettingsAndPull() {
       const urlVal = String(document.getElementById("modal-gas-url")?.value || "").trim() || DEFAULT_GAS_URL;
+      const pgSheetVal = String(document.getElementById("modal-pg-sheet-name")?.value || "").trim() || "Form Responses 1";
       const rawKeys = String(document.getElementById("modal-custom-api-keys")?.value || "");
       const parsedKeys = rawKeys
         .split(/[\n,;]+/)
@@ -2635,6 +2969,7 @@ ${teksSoal}`;
       const autoSync = Boolean(document.getElementById("modal-auto-sync")?.checked);
 
       state.cloudConfig.gasUrl = urlVal;
+      state.cloudConfig.pgSheetName = pgSheetVal;
       state.cloudConfig.customApiKeys = parsedKeys;
       state.cloudConfig.autoSync = autoSync;
       persistState();
@@ -2692,7 +3027,9 @@ ${teksSoal}`;
             action: "sync_recap",
             nama: recap.nama,
             kelas: recap.kelas,
+            nilaiPg: recap.nilaiPg,
             totalSkor: recap.totalSkor,
+            nilaiAkhir: recap.nilaiAkhir,
             scoresByNo: recap.scoresByNo,
             recap: {
               ...recap,
@@ -2700,16 +3037,13 @@ ${teksSoal}`;
             }
           })
         });
-        const json = await res.json().catch(() => ({}));
-        if (json.status === "error") {
-          throw new Error(json.message || "Apps Script menolak penyimpanan.");
-        }
+
+        const json = await res.json().catch(() => ({ status: "ok" }));
+        if (json.status === "error") throw new Error(json.message);
+
         if (json.driveLinks && typeof json.driveLinks === "object") {
-          Object.entries(json.driveLinks).forEach(([no, link]) => {
-            if (recap.detailsByNo?.[no] && link) {
-              recap.detailsByNo[no].driveUrl = link;
-              recap.detailsByNo[no].imageDataUrl = "";
-            }
+          Object.entries(json.driveLinks).forEach(([no, url]) => {
+            if (recap.detailsByNo?.[no]) recap.detailsByNo[no].driveUrl = url;
           });
         }
         recap.syncedToCloud = true;
@@ -2764,10 +3098,13 @@ ${teksSoal}`;
         const res = await fetch(`${gasUrl}${sep}action=load_all&_t=${Date.now()}`);
         const json = await res.json();
         if (json.status !== "ok" || !json.data) {
-          throw new Error(json.message || "Respons Spreadsheet tidak valid.");
+          throw new Error(json.message || "Respons dari Google Sheets tidak valid.");
         }
 
-        const { config, recaps } = json.data;
+        const { config, recaps, pgScores } = json.data;
+        if (Array.isArray(pgScores) && pgScores.length > 0) {
+          state.pgScores = pgScores;
+        }
         if (config) {
           if (config.bobotUraianMaks) state.bobotUraianMaks = Number(config.bobotUraianMaks);
           if (config.targetJumlahSoal) state.targetJumlahSoal = Number(config.targetJumlahSoal);
@@ -2787,6 +3124,8 @@ ${teksSoal}`;
         }
         if (Array.isArray(recaps) && recaps.length > 0) {
           state.recaps = normalizeAndMergeRecaps([...state.recaps, ...recaps]);
+        } else if (state.recaps.length > 0) {
+          state.recaps = normalizeAndMergeRecaps(state.recaps);
         }
 
         persistState();
@@ -2797,10 +3136,11 @@ ${teksSoal}`;
 
         if (!options.silent) {
           const jmlSiswa = Array.isArray(config?.students) ? config.students.length : state.students.length;
-          if (jmlSiswa > 0) {
-            showToast(`Berhasil memuat ${jmlSiswa} siswa & data terbaru dari Google Sheets!`, "success");
+          const jmlPg = state.pgScores.length;
+          if (jmlSiswa > 0 || jmlPg > 0) {
+            showToast(`Berhasil memuat ${jmlSiswa} siswa & ${jmlPg} nilai PG (skala 70) dari Google Sheets!`, "success");
           } else {
-            showToast("Terhubung ke Sheets, namun tab 'Daftar Siswa' belum berisi data.", "warning");
+            showToast("Terhubung ke Sheets, namun tab 'Daftar Siswa' & 'Form Responses 1' belum berisi data.", "warning");
           }
         }
         return true;
