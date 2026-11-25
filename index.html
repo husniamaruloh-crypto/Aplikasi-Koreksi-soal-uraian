@@ -2645,9 +2645,8 @@ ${teksSoal}`;
       const gasUrl = state.cloudConfig.gasUrl || DEFAULT_GAS_URL;
       if (!gasUrl) return;
       try {
-        await fetch(gasUrl, {
+        const res = await fetch(gasUrl, {
           method: "POST",
-          mode: "no-cors",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify({
             action: "sync_config",
@@ -2659,6 +2658,8 @@ ${teksSoal}`;
             }
           })
         });
+        const json = await res.json().catch(() => ({ status: "ok" }));
+        if (json.status === "error") throw new Error(json.message);
         state.cloudConfig.lastSyncAt = new Date().toLocaleString("id-ID");
         persistState();
         if (!options.silent) {
@@ -2666,6 +2667,86 @@ ${teksSoal}`;
         }
       } catch (err) {
         if (!options.silent) showToast("Gagal mengirim konfigurasi ke Sheets: " + err.message, "error");
+      }
+    }
+
+    async function syncSingleRecapToCloud(recap, options = {}) {
+      const gasUrl = state.cloudConfig.gasUrl || DEFAULT_GAS_URL;
+      if (!gasUrl || !recap) return false;
+      try {
+        // Kirim ringan tanpa mengulang upload foto yang sudah punya driveUrl
+        const cleanDetails = {};
+        Object.entries(recap.detailsByNo || {}).forEach(([no, d]) => {
+          cleanDetails[no] = {
+            ...d,
+            imageDataUrl: d.driveUrl ? "" : (d.imageDataUrl || "")
+          };
+        });
+
+        const res = await fetch(gasUrl, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({
+            action: "sync_recap",
+            recap: {
+              ...recap,
+              detailsByNo: cleanDetails
+            }
+          })
+        });
+        const json = await res.json().catch(() => ({}));
+        if (json.status === "error") {
+          throw new Error(json.message || "Apps Script menolak penyimpanan.");
+        }
+        if (json.driveLinks && typeof json.driveLinks === "object") {
+          Object.entries(json.driveLinks).forEach(([no, link]) => {
+            if (recap.detailsByNo?.[no] && link) {
+              recap.detailsByNo[no].driveUrl = link;
+              recap.detailsByNo[no].imageDataUrl = "";
+            }
+          });
+        }
+        recap.syncedToCloud = true;
+        state.cloudConfig.lastSyncAt = new Date().toLocaleString("id-ID");
+        persistState();
+        if (!options.silent) {
+          showToast(`Data & foto ${recap.nama} tersimpan ke Google Sheets & Drive!`, "success");
+        }
+        return true;
+      } catch (err) {
+        if (!options.silent) showToast(`Gagal sinkron ${recap.nama}: ` + err.message, "error");
+        return false;
+      }
+    }
+
+    async function syncAllRecapsToCloud() {
+      if (state.recaps.length === 0) {
+        return showToast("Belum ada data rekap untuk dikirim.", "warning");
+      }
+      const btn = document.getElementById("btn-sync-all-cloud");
+      if (btn) btn.disabled = true;
+
+      let sukses = 0;
+      try {
+        showToast(`Mengirim ${state.recaps.length} data siswa ke Google Sheets & Drive...`, "info");
+        for (let i = 0; i < state.recaps.length; i++) {
+          const r = state.recaps[i];
+          const ok = await syncSingleRecapToCloud(r, { silent: true });
+          if (ok) sukses++;
+          // Jeda 800ms antar siswa agar Google Apps Script tidak tabrakan
+          if (i < state.recaps.length - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 800));
+          }
+        }
+        await syncAppConfigToCloud({ silent: true });
+        renderRekapTab();
+        if (sukses === state.recaps.length) {
+          showToast(`Semua (${sukses} siswa) berhasil sinkron ke Google Sheets & Drive!`, "success");
+        } else {
+          showToast(`${sukses} dari ${state.recaps.length} siswa tersinkron. Pastikan Apps Script sudah di-deploy Versi Baru.`, "warning");
+        }
+      } finally {
+        if (btn) btn.disabled = false;
       }
     }
 
