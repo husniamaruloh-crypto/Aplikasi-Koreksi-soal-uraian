@@ -558,6 +558,7 @@
     // 1. KONFIGURASI & STATE APLIKASI
     // =========================================================================
     const STORAGE_KEY = "koreksi_psas_mtk9_state_v5";
+    const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbwpn7s0mX-bDVzrX9CcKUYWkwIWwVGMuEn6ff-XOHbAqwf9VJiGN-W_QNzULPNndRbJ/exec";
     const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025";
     const apiKey = ""; // Diisi otomatis oleh environment atau lewat pengaturan kustom
 
@@ -592,7 +593,7 @@
       scanData: {}, // { [questionId]: { mode: 'foto'|'teks', imageDataUrl, imageBase64, imageMime, textAnswer, grading, error, isGrading } }
       recaps: [],
       cloudConfig: {
-        gasUrl: "",
+        gasUrl: DEFAULT_GAS_URL,
         autoSync: true,
         customGeminiKey: ""
       }
@@ -601,7 +602,7 @@
     let isBatchGrading = false;
 
     // =========================================================================
-    // 2. UTILITAS UMUM, TOAST, MODAL & PERSISTENSI
+    // 2. HELPER UTILITAS, PENYIMPANAN & NAVIGASI TAB
     // =========================================================================
     function escapeHtml(str) {
       return String(str ?? "")
@@ -620,47 +621,92 @@
 
     function formatScore(val) {
       const n = roundScore(val);
-      return Number.isInteger(n) ? String(n) : n.toFixed(1).replace(/\.0$/, "");
+      return Number.isInteger(n) ? String(n) : String(n).replace(".", ",");
     }
 
-    function getQuestionMaxScore(q) {
-      if (!q || !Array.isArray(q.rubrik)) return 0;
-      return roundScore(q.rubrik.reduce((sum, r) => sum + (Number(r.skorMaks) || 0), 0));
+    function normalizeNoSoal(no) {
+      return String(no ?? "").replace(/^No\.?\s*/i, "").trim();
     }
 
     function getDefaultPerQuestionWeight() {
-      const bobot = Number(state.bobotUraianMaks) || 30;
+      const max = Number(state.bobotUraianMaks) || 30;
       const count = Math.max(1, Number(state.targetJumlahSoal) || 5);
-      return roundScore(bobot / count);
+      return Math.max(0.5, Math.round((max / count) * 2) / 2);
     }
 
-    function normalizeNoSoal(val) {
-      return String(val || "").replace(/^No\.?\s*/i, "").trim();
+    function getQuestionMaxScore(q) {
+      if (!q || !Array.isArray(q.rubrik) || q.rubrik.length === 0) {
+        return getDefaultPerQuestionWeight();
+      }
+      return roundScore(q.rubrik.reduce((s, r) => s + (Number(r.skorMaks) || 0), 0));
     }
 
-    function showToast(message, type = "info") {
-      const container = document.getElementById("toast-container");
-      if (!container) return;
-      const colors = {
-        success: "bg-emerald-600 text-white",
-        error: "bg-rose-600 text-white",
-        warning: "bg-amber-500 text-white",
-        info: "bg-slate-800 text-white"
-      };
-      const el = document.createElement("div");
-      el.className = `pointer-events-auto px-4 py-3 rounded-xl shadow-lg text-xs sm:text-sm font-semibold flex items-center justify-between gap-3 transition-all duration-300 ${colors[type] || colors.info}`;
-      el.innerHTML = `<span>${escapeHtml(message)}</span>`;
-      container.appendChild(el);
-      setTimeout(() => {
-        el.style.opacity = "0";
-        el.style.transform = "translateY(8px)";
-        setTimeout(() => el.remove(), 300);
-      }, 3600);
+    function normalizeAndMergeRecaps(list) {
+      const map = new Map();
+      (list || []).forEach((item) => {
+        if (!item || !item.nama) return;
+        const nama = String(item.nama).trim();
+        const kelas = String(item.kelas || "").trim();
+        const key = `${nama.toLowerCase()}|${kelas.toLowerCase()}`;
+
+        if (!map.has(key)) {
+          map.set(key, {
+            id: item.id || `rec-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            timestamp: item.timestamp || new Date().toLocaleString("id-ID"),
+            nama,
+            kelas,
+            cloudSynced: Boolean(item.cloudSynced),
+            driveLinks: { ...(item.driveLinks || {}) },
+            rincianMap: new Map()
+          });
+        }
+
+        const existing = map.get(key);
+        if (item.timestamp) existing.timestamp = item.timestamp;
+        if (item.cloudSynced) existing.cloudSynced = true;
+        if (item.driveLinks) {
+          existing.driveLinks = { ...existing.driveLinks, ...item.driveLinks };
+        }
+
+        (item.rincian || []).forEach((r) => {
+          const cleanNo = normalizeNoSoal(r.noSoal);
+          if (!cleanNo) return;
+          existing.rincianMap.set(cleanNo, {
+            noSoal: cleanNo,
+            topik: r.topik || "Uraian",
+            skor: roundScore(r.skor),
+            skorMaks: Number(r.skorMaks) || 0,
+            catatanUmum: r.catatanUmum || "",
+            transkripsi: r.transkripsi || ""
+          });
+        });
+      });
+
+      const merged = [];
+      map.forEach((entry) => {
+        const rincian = Array.from(entry.rincianMap.values()).sort((a, b) =>
+          a.noSoal.localeCompare(b.noSoal, "id", { numeric: true })
+        );
+        const totalSkor = roundScore(rincian.reduce((s, r) => s + (Number(r.skor) || 0), 0));
+        merged.push({
+          id: entry.id,
+          timestamp: entry.timestamp,
+          nama: entry.nama,
+          kelas: entry.kelas,
+          cloudSynced: entry.cloudSynced,
+          driveLinks: entry.driveLinks,
+          rincian,
+          totalSkor
+        });
+      });
+
+      return merged;
     }
 
     function openModal(htmlContent) {
       const backdrop = document.getElementById("app-modal-backdrop");
       const content = document.getElementById("app-modal-content");
+      if (!backdrop || !content) return;
       content.innerHTML = htmlContent;
       backdrop.classList.remove("hidden");
       lucide.createIcons();
@@ -668,15 +714,30 @@
 
     function closeModal() {
       const backdrop = document.getElementById("app-modal-backdrop");
-      backdrop.classList.add("hidden");
-      document.getElementById("app-modal-content").innerHTML = "";
+      if (backdrop) backdrop.classList.add("hidden");
     }
 
-    document.getElementById("app-modal-backdrop").addEventListener("click", (e) => {
-      if (e.target.id === "app-modal-backdrop") closeModal();
-    });
+    function showToast(message, type = "info") {
+      const container = document.getElementById("toast-container");
+      if (!container) return;
+      const colors = {
+        success: "bg-emerald-600 text-white border-emerald-500",
+        error: "bg-rose-600 text-white border-rose-500",
+        warning: "bg-amber-600 text-white border-amber-500",
+        info: "bg-slate-900 text-white border-slate-700"
+      };
+      const toast = document.createElement("div");
+      toast.className = `pointer-events-auto px-4 py-3 rounded-xl border shadow-lg text-xs font-semibold transition-all duration-300 ${colors[type] || colors.info}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = "0";
+        toast.style.transform = "translateY(8px)";
+        setTimeout(() => toast.remove(), 300);
+      }, 3600);
+    }
 
-    function copyTextToClipboard(text, successMsg = "Berhasil disalin ke clipboard!") {
+    function copyTextToClipboard(text, successMsg = "Teks disalin ke clipboard!") {
       const ta = document.createElement("textarea");
       ta.value = text;
       ta.style.position = "fixed";
@@ -689,9 +750,8 @@
         showToast(successMsg, "success");
       } catch (err) {
         showToast("Gagal menyalin teks.", "error");
-      } finally {
-        ta.remove();
       }
+      document.body.removeChild(ta);
     }
 
     function persistState() {
@@ -709,69 +769,8 @@
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
       } catch (err) {
-        console.warn("Gagal menyimpan state ke localStorage:", err);
+        console.warn("Gagal menyimpan state lokal:", err);
       }
-    }
-
-    function normalizeAndMergeRecaps(recapList) {
-      const map = new Map();
-      (recapList || []).forEach((item) => {
-        if (!item || !item.nama) return;
-        const namaClean = String(item.nama).trim();
-        const kelasClean = String(item.kelas || "").trim();
-        const key = `${namaClean.toLowerCase()}__${kelasClean.toLowerCase()}`;
-
-        if (!map.has(key)) {
-          map.set(key, {
-            id: item.id || `rec-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-            timestamp: item.timestamp || new Date().toLocaleString("id-ID"),
-            nama: namaClean,
-            kelas: kelasClean,
-            cloudSynced: Boolean(item.cloudSynced),
-            driveLinks: { ...(item.driveLinks || {}) },
-            rincianMap: {}
-          });
-        }
-
-        const entry = map.get(key);
-        if (item.timestamp) entry.timestamp = item.timestamp;
-        if (item.cloudSynced) entry.cloudSynced = true;
-        if (item.driveLinks) {
-          Object.keys(item.driveLinks).forEach((k) => {
-            entry.driveLinks[normalizeNoSoal(k)] = item.driveLinks[k];
-          });
-        }
-
-        (item.rincian || []).forEach((r) => {
-          const cleanNo = normalizeNoSoal(r.noSoal);
-          if (!cleanNo) return;
-          entry.rincianMap[cleanNo] = {
-            noSoal: cleanNo,
-            topik: r.topik || "Uraian",
-            skor: roundScore(r.skor),
-            skorMaks: r.skorMaks ? roundScore(r.skorMaks) : undefined,
-            catatanUmum: r.catatanUmum || "",
-            transkripsi: r.transkripsi || ""
-          };
-        });
-      });
-
-      return Array.from(map.values()).map((entry) => {
-        const rincian = Object.values(entry.rincianMap).sort((a, b) =>
-          String(a.noSoal).localeCompare(String(b.noSoal), "id", { numeric: true })
-        );
-        const totalSkor = roundScore(rincian.reduce((s, r) => s + (Number(r.skor) || 0), 0));
-        return {
-          id: entry.id,
-          timestamp: entry.timestamp,
-          nama: entry.nama,
-          kelas: entry.kelas,
-          totalSkor,
-          cloudSynced: entry.cloudSynced,
-          driveLinks: entry.driveLinks,
-          rincian
-        };
-      });
     }
 
     function loadState() {
@@ -779,30 +778,22 @@
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return;
         const parsed = JSON.parse(raw);
-        if (typeof parsed.bobotUraianMaks === "number" && parsed.bobotUraianMaks > 0) {
-          state.bobotUraianMaks = parsed.bobotUraianMaks;
-        }
-        if (typeof parsed.targetJumlahSoal === "number" && parsed.targetJumlahSoal > 0) {
-          state.targetJumlahSoal = parsed.targetJumlahSoal;
-        }
-        if (Array.isArray(parsed.students)) {
-          state.students = parsed.students;
-          state.studentsImported = Boolean(parsed.studentsImported || parsed.students.length > 0);
-        }
-        state.currentStudentName = parsed.currentStudentName || "";
-        state.currentStudentClass = parsed.currentStudentClass || "";
-        if (Array.isArray(parsed.questions) && parsed.questions.length > 0) {
-          state.questions = parsed.questions;
-        }
-        if (Array.isArray(parsed.recaps)) {
-          state.recaps = normalizeAndMergeRecaps(parsed.recaps);
-        }
+        if (parsed.bobotUraianMaks) state.bobotUraianMaks = Number(parsed.bobotUraianMaks);
+        if (parsed.targetJumlahSoal) state.targetJumlahSoal = Number(parsed.targetJumlahSoal);
+        if (Array.isArray(parsed.students)) state.students = parsed.students;
+        state.studentsImported = Boolean(parsed.studentsImported);
+        if (typeof parsed.currentStudentName === "string") state.currentStudentName = parsed.currentStudentName;
+        if (typeof parsed.currentStudentClass === "string") state.currentStudentClass = parsed.currentStudentClass;
+        if (Array.isArray(parsed.questions) && parsed.questions.length > 0) state.questions = parsed.questions;
+        if (Array.isArray(parsed.recaps)) state.recaps = normalizeAndMergeRecaps(parsed.recaps);
         if (parsed.cloudConfig) {
           state.cloudConfig = {
-            gasUrl: parsed.cloudConfig.gasUrl || "",
+            gasUrl: parsed.cloudConfig.gasUrl || DEFAULT_GAS_URL,
             autoSync: parsed.cloudConfig.autoSync !== false,
             customGeminiKey: parsed.cloudConfig.customGeminiKey || ""
           };
+        } else {
+          state.cloudConfig.gasUrl = DEFAULT_GAS_URL;
         }
       } catch (err) {
         console.warn("Gagal memuat state:", err);
