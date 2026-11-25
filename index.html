@@ -559,7 +559,7 @@
     // =========================================================================
     const STORAGE_KEY = "koreksi_psas_mtk9_state_v5";
     const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbwpn7s0mX-bDVzrX9CcKUYWkwIWwVGMuEn6ff-XOHbAqwf9VJiGN-W_QNzULPNndRbJ/exec";
-    const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025";
+    const GEMINI_MODEL = "gemini-3-flash-preview";
     const apiKey = ""; // Diisi otomatis oleh environment atau lewat pengaturan kustom
 
     const DEFAULT_QUESTION = {
@@ -1204,6 +1204,9 @@
             if ((res.status === 429 || res.status >= 500) && attempt < delays.length) {
               await new Promise((r) => setTimeout(r, delays[attempt]));
               continue;
+            }
+            if (res.status === 403 || String(msg).toLowerCase().includes("permission denied")) {
+              throw new Error(`Izin API ditolak (${msg}). Jika membuka aplikasi di luar pratinjau, silakan masukkan Gemini API Key Anda di menu 'Sheets' (pojok kanan atas).`);
             }
             throw new Error(msg);
           }
