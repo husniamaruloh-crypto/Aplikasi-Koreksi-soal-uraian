@@ -2210,6 +2210,66 @@ ${teksSoal}`;
       return isNaN(num) ? null : { raw: num, max: null };
     }
 
+    function extractPgRowsFromSheetMatrix(rows) {
+      if (!rows || rows.length < 2) return [];
+      const header = (rows[0] || []).map((c) => String(c || "").trim().toLowerCase());
+      let scoreCol = header.findIndex((c) => c === "score" || c.includes("score") || c.includes("skor") || c.includes("nilai") || c.includes("poin"));
+      let kelasCol = header.findIndex((c) => c.includes("kelas") && !c.includes("nama"));
+      if (kelasCol === -1) kelasCol = header.findIndex((c) => c.includes("pilih kelas") || c.includes("rombel"));
+
+      // Deteksi semua kolom nama (mendukung format multi-kolom per kelas seperti "PILIH NAMA - KELAS 9A", "PILIH NAMA - KELAS 9B", dst.)
+      let namaCols = [];
+      header.forEach((c, idx) => {
+        if (idx === scoreCol || idx === kelasCol) return;
+        if (c.includes("nama") || c.includes("siswa") || c.includes("peserta")) {
+          namaCols.push(idx);
+        }
+      });
+
+      if (scoreCol === -1) scoreCol = 1;
+      if (namaCols.length === 0) namaCols = [2];
+
+      const mapPg = new Map();
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i] || [];
+        const parsedScore = parseRawPgScoreCell(row[scoreCol]);
+        if (!parsedScore) continue;
+
+        let kelas = kelasCol >= 0 ? String(row[kelasCol] || "").trim() : "";
+        let nama = "";
+        let matchedHeaderClass = "";
+
+        for (const colIdx of namaCols) {
+          const cellVal = String(row[colIdx] || "").trim();
+          if (cellVal) {
+            nama = cellVal;
+            const hText = String(rows[0][colIdx] || "").trim();
+            const clsMatch = hText.match(/kelas\s*([0-9a-zA-Z\-]+)/i);
+            if (clsMatch) matchedHeaderClass = clsMatch[1].toUpperCase();
+            break;
+          }
+        }
+
+        if (!kelas && matchedHeaderClass) kelas = matchedHeaderClass;
+        if (!nama) continue;
+
+        const nilaiPg70 = computeConvertedPgScore(parsedScore.raw, parsedScore.max);
+        const key = `${normalizeNameForMatch(nama)}|${normalizeClassForMatch(kelas)}`;
+        const existing = mapPg.get(key);
+        // Jika siswa mengirim ganda, ambil skor tertinggi
+        if (!existing || nilaiPg70 >= existing.nilaiPg70) {
+          mapPg.set(key, {
+            nama,
+            kelas,
+            rawScore: parsedScore.raw,
+            maxRawScore: parsedScore.max || (state.jumlahSoalPg * state.skorPerSoalPg),
+            nilaiPg70
+          });
+        }
+      }
+      return Array.from(mapPg.values());
+    }
+
     function handleImportPgExcel(event) {
       const file = event.target.files?.[0];
       if (!file) return;
@@ -2217,36 +2277,16 @@ ${teksSoal}`;
       reader.onload = (e) => {
         try {
           const wb = XLSX.read(e.target.result, { type: "array" });
-          const ws = wb.Sheets[wb.SheetNames[0]];
+          const targetSheetName =
+            wb.SheetNames.find((n) => n.toLowerCase().includes("form responses") || n.toLowerCase().includes("respon")) ||
+            wb.SheetNames[0];
+          const ws = wb.Sheets[targetSheetName];
           const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
           if (!rows || rows.length < 2) {
             return showToast("File Excel/CSV PG kosong.", "warning");
           }
 
-          const header = (rows[0] || []).map((c) => String(c || "").trim().toLowerCase());
-          let scoreCol = header.findIndex((c) => c.includes("score") || c.includes("skor") || c.includes("nilai") || c.includes("poin"));
-          let namaCol = header.findIndex((c) => c.includes("nama") || c.includes("siswa") || c.includes("peserta"));
-          let kelasCol = header.findIndex((c) => c.includes("kelas") || c.includes("rombel"));
-
-          if (scoreCol === -1) scoreCol = 1;
-          if (namaCol === -1) namaCol = 2;
-          if (kelasCol === -1) kelasCol = 3;
-
-          const importedPg = [];
-          for (let i = 1; i < rows.length; i++) {
-            const nama = String(rows[i][namaCol] || "").trim();
-            const kelas = kelasCol >= 0 ? String(rows[i][kelasCol] || "").trim() : "";
-            const parsedScore = parseRawPgScoreCell(rows[i][scoreCol]);
-            if (!nama || !parsedScore) continue;
-            const nilaiPg70 = computeConvertedPgScore(parsedScore.raw, parsedScore.max);
-            importedPg.push({
-              nama,
-              kelas,
-              rawScore: parsedScore.raw,
-              maxRawScore: parsedScore.max || (state.jumlahSoalPg * state.skorPerSoalPg),
-              nilaiPg70
-            });
-          }
+          const importedPg = extractPgRowsFromSheetMatrix(rows);
 
           if (importedPg.length === 0) {
             return showToast("Tidak ditemukan kolom Nama & Skor PG yang valid pada file.", "warning");
@@ -2256,7 +2296,7 @@ ${teksSoal}`;
           state.recaps = normalizeAndMergeRecaps(state.recaps);
           persistState();
           renderRekapTab();
-          showToast(`${importedPg.length} nilai PG berhasil dimuat & dikonversi ke skala 70!`, "success");
+          showToast(`${importedPg.length} nilai PG dari '${targetSheetName}' berhasil dimuat & dikonversi ke skala 70!`, "success");
         } catch (err) {
           showToast("Gagal membaca file PG: " + err.message, "error");
         } finally {
@@ -2635,22 +2675,40 @@ ${teksSoal}`;
         "  if (!sheet || sheet.getLastRow() < 2) return [];",
         "  const vals = sheet.getDataRange().getValues();",
         "  const header = (vals[0] || []).map(function(c) { return String(c || '').trim().toLowerCase(); });",
-        "  let scoreCol = header.findIndex(function(c) { return c.indexOf('score') !== -1 || c.indexOf('skor') !== -1 || c.indexOf('nilai') !== -1; });",
-        "  let namaCol = header.findIndex(function(c) { return c.indexOf('nama') !== -1 || c.indexOf('siswa') !== -1 || c.indexOf('peserta') !== -1; });",
-        "  let kelasCol = header.findIndex(function(c) { return c.indexOf('kelas') !== -1 || c.indexOf('rombel') !== -1; });",
+        "  let scoreCol = header.findIndex(function(c) { return c === 'score' || c.indexOf('score') !== -1 || c.indexOf('skor') !== -1 || c.indexOf('nilai') !== -1; });",
+        "  let kelasCol = header.findIndex(function(c) { return c.indexOf('kelas') !== -1 && c.indexOf('nama') === -1; });",
+        "  if (kelasCol === -1) kelasCol = header.findIndex(function(c) { return c.indexOf('pilih kelas') !== -1 || c.indexOf('rombel') !== -1; });",
+        "  const namaCols = [];",
+        "  for (let h = 0; h < header.length; h++) {",
+        "    if (h === scoreCol || h === kelasCol) continue;",
+        "    if (header[h].indexOf('nama') !== -1 || header[h].indexOf('siswa') !== -1 || header[h].indexOf('peserta') !== -1) {",
+        "      namaCols.push(h);",
+        "    }",
+        "  }",
         "  if (scoreCol === -1) scoreCol = 1;",
-        "  if (namaCol === -1) namaCol = 2;",
-        "  if (kelasCol === -1) kelasCol = 3;",
+        "  if (namaCols.length === 0) namaCols.push(2);",
         "",
         "  const mapPg = {};",
         "  for (let i = 1; i < vals.length; i++) {",
-        "    const nama = String(vals[i][namaCol] || '').trim();",
-        "    const kelas = kelasCol >= 0 ? String(vals[i][kelasCol] || '').trim() : '';",
         "    const parsed = parseSkorPgGoogleForm(vals[i][scoreCol]);",
-        "    if (!nama || !parsed) continue;",
+        "    if (!parsed) continue;",
+        "    let kelas = kelasCol >= 0 ? String(vals[i][kelasCol] || '').trim() : '';",
+        "    let nama = '';",
+        "    for (let nc = 0; nc < namaCols.length; nc++) {",
+        "      const colIdx = namaCols[nc];",
+        "      const cellVal = String(vals[i][colIdx] || '').trim();",
+        "      if (cellVal) {",
+        "        nama = cellVal;",
+        "        if (!kelas) {",
+        "          const mCls = String(vals[0][colIdx] || '').match(/kelas\\s*([0-9a-zA-Z\\-]+)/i);",
+        "          if (mCls) kelas = mCls[1].toUpperCase();",
+        "        }",
+        "        break;",
+        "      }",
+        "    }",
+        "    if (!nama) continue;",
         "    const nilaiPg70 = konversiSkorPgKe70(parsed.raw, parsed.max);",
-        "    const key = nama.toLowerCase() + '|' + kelas.toLowerCase();",
-        "    // Jika siswa mengirim lebih dari 1 kali, ambil skor tertinggi atau respon terbaru",
+        "    const key = nama.toLowerCase().replace(/[^a-z0-9\\s]/g, ' ').replace(/\\s+/g, ' ').trim() + '|' + kelas.toLowerCase().replace(/[^a-z0-9]/g, '');",
         "    if (!mapPg[key] || nilaiPg70 >= mapPg[key].nilaiPg70) {",
         "      mapPg[key] = { nama: nama, kelas: kelas, rawScore: parsed.raw, maxRawScore: parsed.max, nilaiPg70: nilaiPg70 };",
         "    }",
